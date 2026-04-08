@@ -1,0 +1,33 @@
+node_modules/
+src/ui/node_modules/
+dist/
+src/ui/dist/
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.local
+.env.*.local
+.DS_Store
+.claude/
+
+# Internal docs (not for public repo)
+DESIGN_SPEC.md
+PRODUCT_INVENTORY.md
+CODE_REVIEW_FINDINGS_R2.md
+docs/
+src/ui/README.md
+src/ui/src/assets/react.svg
+src/ui/src/assets/vite.svg
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Compiled bin entry (source is bin/claw-lens.ts)
+bin/claw-lens.js
