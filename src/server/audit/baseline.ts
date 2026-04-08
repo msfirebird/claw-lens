@@ -107,7 +107,7 @@ export function buildBaseline(db: Database.Database, agentId: string): AgentBase
 export function getBaseline(db: Database.Database, agentId: string): AgentBaseline | null {
   const row = db.prepare('SELECT * FROM agent_baselines WHERE agent_id = ?').get(agentId) as Record<string, unknown> | undefined;
   if (!row) return null;
-  const safeParseArr = <T = string>(v: unknown): T[] => { try { return JSON.parse(v as string || '[]') ?? []; } catch { return []; } };
+  const safeParseArr = <T = string>(v: unknown): T[] => { try { const p = JSON.parse(v as string || '[]'); return Array.isArray(p) ? p : []; } catch { return []; } };
   return {
     agent_id: row.agent_id as string,
     computed_at: row.computed_at as number,

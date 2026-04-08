@@ -13,6 +13,10 @@ function getOption(name: string): string | undefined {
 }
 
 const port = parseInt(getOption('port') || process.env.PORT || '4242', 10);
+if (isNaN(port) || port < 1 || port > 65535) {
+  console.error(`Invalid port: ${getOption('port') || process.env.PORT}. Must be 1-65535.`);
+  process.exit(1);
+}
 const clawHome = process.env.OPENCLAW_HOME;
 const open = !getFlag('no-open');
 

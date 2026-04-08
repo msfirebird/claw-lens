@@ -3,7 +3,8 @@ import { initReactI18next } from 'react-i18next';
 import en from './locales/en.json';
 import zh from './locales/zh.json';
 
-const savedLang = localStorage.getItem('claw-lens-lang') || 'en';
+const isZhPath = typeof window !== 'undefined' && window.location.pathname?.startsWith('/zh');
+const savedLang = isZhPath ? 'zh' : 'en';
 
 i18n.use(initReactI18next).init({
   resources: { en: { translation: en }, zh: { translation: zh } },

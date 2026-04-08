@@ -27,6 +27,36 @@ import AgentLoops from './pages/AgentLoops';
 import TokenUsage from './pages/TokenUsage';
 import ClawFish from './components/ClawFish';
 
+const routeConfig: { path: string; element: React.ReactNode }[] = [
+  { path: '/',                  element: <Overview /> },
+  { path: '/tokens',            element: <TokenUsage /> },
+  { path: '/agents',            element: <Agents /> },
+  { path: '/sessions',          element: <Sessions /> },
+  { path: '/live',              element: <LiveMonitor /> },
+  { path: '/profiler',          element: <Profiler /> },
+  { path: '/cron',              element: <Cron /> },
+  { path: '/audit',             element: <Audit /> },
+  { path: '/memory',            element: <Memory /> },
+  { path: '/timeline',          element: <SessionTimeline /> },
+  { path: '/cachetrace',        element: <DebugReplay /> },
+  { path: '/contextbreakdown',  element: <DebugContext /> },
+  { path: '/deepturn',          element: <AgentLoops /> },
+  { path: '/settings',          element: <SettingsPage /> },
+];
+
+/** Returns "/zh" when current language is Chinese, "" otherwise */
+function useLangPrefix(): string {
+  const { i18n } = useTranslation();
+  return i18n.language === 'zh' ? '/zh' : '';
+}
+
+/** Strip /zh prefix from pathname for route matching */
+function stripZh(pathname: string): string {
+  if (pathname === '/zh') return '/';
+  if (pathname.startsWith('/zh/')) return pathname.slice(3);
+  return pathname;
+}
+
 interface NavItem {
   to: string;
   labelKey: string;
@@ -84,8 +114,10 @@ function SidebarGroup({
 }) {
   const location = useLocation();
   const { t } = useTranslation();
+  const prefix = useLangPrefix();
+  const bare = stripZh(location.pathname);
   const hasActive = group.items.some(item =>
-    item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to)
+    item.to === '/' ? bare === '/' : bare.startsWith(item.to)
   );
   const [open, setOpen] = useState(defaultOpen || hasActive);
 
@@ -143,7 +175,7 @@ function SidebarGroup({
           {group.items.map(({ to, labelKey, icon: Icon, badgeKey }) => (
             <NavLink
               key={to}
-              to={to}
+              to={prefix + to}
               end={to === '/'}
               style={({ isActive }) => ({
                 display: 'flex',
@@ -164,14 +196,14 @@ function SidebarGroup({
               })}
               onMouseEnter={(e) => {
                 const el = e.currentTarget as HTMLAnchorElement;
-                if (location.pathname !== to) {
+                if (bare !== to) {
                   el.style.color = 'var(--text)';
                   el.style.background = 'var(--surface2)';
                 }
               }}
               onMouseLeave={(e) => {
                 const el = e.currentTarget as HTMLAnchorElement;
-                const isActive = to === '/' ? location.pathname === '/' : location.pathname.startsWith(to);
+                const isActive = to === '/' ? bare === '/' : bare.startsWith(to);
                 el.style.color = isActive ? 'var(--text)' : 'var(--muted)';
                 el.style.background = isActive ? 'var(--surface3)' : 'transparent';
               }}
@@ -205,6 +237,7 @@ export default function App() {
   const [shareDataUrl, setShareDataUrl] = useState<string | null>(null);
   const mainRef = useRef<HTMLElement>(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const { t, i18n } = useTranslation();
   useHumanInLoopNotifier();
   void allRoutes; // used for type-checking
@@ -213,6 +246,8 @@ export default function App() {
     const next = i18n.language === 'zh' ? 'en' : 'zh';
     i18n.changeLanguage(next);
     localStorage.setItem('claw-lens-lang', next);
+    const bare = stripZh(location.pathname);
+    navigate(next === 'zh' ? '/zh' + bare : bare);
   }
 
   async function triggerReingest() {
@@ -486,21 +521,11 @@ export default function App() {
       <main ref={mainRef} className="main" style={{ display: 'flex', flexDirection: 'column' }}>
         <div style={{ flex: 1, overflow: 'auto' }}>
         <Routes>
-          <Route path="/"          element={<Overview />} />
-          <Route path="/tokens"    element={<TokenUsage />} />
-          <Route path="/agents"    element={<Agents />} />
-          <Route path="/sessions"  element={<Sessions />} />
-          <Route path="/live"      element={<LiveMonitor />} />
-          <Route path="/profiler"  element={<Profiler />} />
-
-          <Route path="/cron"      element={<Cron />} />
-          <Route path="/audit"     element={<Audit />} />
-          <Route path="/memory"    element={<Memory />} />
-          <Route path="/timeline"             element={<SessionTimeline />} />
-          <Route path="/cachetrace"          element={<DebugReplay />} />
-          <Route path="/contextbreakdown"    element={<DebugContext />} />
-          <Route path="/deepturn"         element={<AgentLoops />} />
-          <Route path="/settings"  element={<SettingsPage />} />
+          {['', '/zh'].map(prefix =>
+            routeConfig.map(r => (
+              <Route key={prefix + r.path} path={prefix + r.path} element={r.element} />
+            ))
+          )}
         </Routes>
         </div>
       </main>

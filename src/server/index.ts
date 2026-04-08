@@ -119,5 +119,9 @@ export async function startServer(opts: ServerOptions = {}): Promise<void> {
 // Run directly (e.g. via ts-node-dev in dev mode)
 if (require.main === module) {
   const port = parseInt(process.env.PORT || '4242', 10);
+  if (isNaN(port) || port < 1 || port > 65535) {
+    console.error(`Invalid PORT: ${process.env.PORT}. Must be 1-65535.`);
+    process.exit(1);
+  }
   startServer({ port, open: true }).catch(console.error);
 }
