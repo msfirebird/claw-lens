@@ -106,13 +106,18 @@ export async function startServer(opts: ServerOptions = {}): Promise<void> {
     console.log(`\nclaw-lens running at http://localhost:${port}\n`);
     if (opts.open) {
       import('child_process').then(({ exec }) => {
-        exec(`open http://localhost:${port}`);
+        const url = `http://localhost:${port}`;
+        const cmd = process.platform === 'win32' ? `start ${url}`
+          : process.platform === 'darwin' ? `open ${url}`
+          : `xdg-open ${url}`;
+        exec(cmd);
       });
     }
   });
 }
 
-// Run directly
+// Run directly (e.g. via ts-node-dev in dev mode)
 if (require.main === module) {
-  startServer({ open: true }).catch(console.error);
+  const port = parseInt(process.env.PORT || '4242', 10);
+  startServer({ port, open: true }).catch(console.error);
 }

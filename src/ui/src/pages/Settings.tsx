@@ -152,55 +152,7 @@ export default function Settings() {
               localStorage.setItem('clawfish', next ? 'on' : 'off');
               window.location.reload();
             }}
-            style={clawfishEnabled ? {
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              gap: 'var(--space-2)',
-              padding: 'var(--space-2) var(--space-5)',
-              background: 'rgba(99,153,255,0.10)',
-              border: '1px solid rgba(99,153,255,0.35)',
-              borderRadius: 'var(--radius-sm)',
-              color: 'rgba(180,210,255,0.92)',
-              fontFamily: 'var(--font-b)',
-              fontSize: 12,
-              letterSpacing: '.1em',
-              textTransform: 'uppercase' as const,
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'color .12s, border-color .12s, background .12s',
-            } : {
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              gap: 'var(--space-2)',
-              padding: 'var(--space-2) var(--space-5)',
-              background: '#3b82f6',
-              border: 'none',
-              borderRadius: 4,
-              color: '#fff',
-              fontFamily: 'var(--font-b)',
-              fontSize: 12,
-              letterSpacing: '.1em',
-              textTransform: 'uppercase' as const,
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'background .15s',
-            }}
-            onMouseEnter={e => {
-              if (clawfishEnabled) {
-                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(99,153,255,0.18)';
-                (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(99,153,255,0.65)';
-                (e.currentTarget as HTMLButtonElement).style.color = '#fff';
-              } else {
-                (e.currentTarget as HTMLButtonElement).style.background = '#2563eb';
-              }
-            }}
-            onMouseLeave={e => {
-              if (clawfishEnabled) {
-                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(99,153,255,0.10)';
-                (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(99,153,255,0.35)';
-                (e.currentTarget as HTMLButtonElement).style.color = 'rgba(180,210,255,0.92)';
-              } else {
-                (e.currentTarget as HTMLButtonElement).style.background = '#3b82f6';
-              }
-            }}
+            className={`settings-toggle-btn ${clawfishEnabled ? 'enabled' : 'disabled'}`}
           >
             {clawfishEnabled ? t('claw.disable') : t('claw.enable')}
           </button>

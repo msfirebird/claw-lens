@@ -38,6 +38,9 @@ cd src/ui && npm install && cd ../..
 
 # 3. Start dev server (with hot reload)
 npm run dev
+
+# Custom port
+PORT=3000 npm run dev
 ```
 
 This runs the backend (Express + ts-node-dev) and frontend (React + Vite) concurrently. Code changes auto-restart/refresh.
@@ -50,6 +53,10 @@ npm run build
 
 # Start
 npm start
+
+# Custom port
+npm start -- --port 3000
+npm start -- --no-open
 ```
 
 Compiles TypeScript to `dist/`, then runs the compiled server.
