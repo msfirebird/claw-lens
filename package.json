@@ -42,7 +42,7 @@
   },
   "main": "./dist/src/server/index.js",
   "repository": { "type": "git", "url": "https://github.com/msfirebird/claw-lens" },
-  "homepage": "https://claw-lens.dev",
+  "homepage": "https://claw-lens.com",
   "bugs": { "url": "https://github.com/msfirebird/claw-lens/issues" },
   "files": [
     "dist/",
