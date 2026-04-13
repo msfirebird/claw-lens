@@ -22,13 +22,23 @@ claw-lens is built for this new reality. Cost, not latency, is the dominant sign
 
 ## Screenshot
 
-![Overview KPI](./assets/screenshots/overview-kpi.png)
-![Agent](./assets/screenshots/agent.png)
-![Model](./assets/screenshots/model.png)
-![Sessions](./assets/screenshots/sessions.png)
-![Cron Call](./assets/screenshots/cron-call.png)
-![Live](./assets/screenshots/live.png)
-![Activities](./assets/screenshots/activities.png)
+<table border="0" cellspacing="0" cellpadding="4">
+  <tr>
+    <td colspan="2" style="border:none;padding:4px"><img src="./assets/screenshots/overview_kpi.png" width="100%" alt="Overview KPI"></td>
+  </tr>
+  <tr>
+    <td style="border:none;padding:4px"><img src="./assets/screenshots/overview_agent.png" width="100%" alt="Agent"></td>
+    <td style="border:none;padding:4px"><img src="./assets/screenshots/overview_model.png" width="100%" alt="Model"></td>
+  </tr>
+  <tr>
+    <td style="border:none;padding:4px"><img src="./assets/screenshots/overview_session.png" width="100%" alt="Sessions"></td>
+    <td style="border:none;padding:4px"><img src="./assets/screenshots/overview_cron.png" width="100%" alt="Cron Call"></td>
+  </tr>
+  <tr>
+    <td style="border:none;padding:4px"><img src="./assets/screenshots/overview_live.png" width="100%" alt="Live"></td>
+    <td style="border:none;padding:4px"><img src="./assets/screenshots/overview_activity.png" width="100%" alt="Activities"></td>
+  </tr>
+</table>
 
 ---
 
