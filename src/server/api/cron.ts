@@ -156,7 +156,7 @@ export function cronRouter(db?: import('better-sqlite3').Database): Router {
   // GET /api/cron/runs?jobId=<id>&limit=20
   r.get('/runs', (req: Request, res: Response) => {
     const jobId = req.query.jobId as string | undefined;
-    const limit = Math.min(Number(req.query.limit) || 20, 200);
+    const limit = Math.min(Math.max(1, Number(req.query.limit) || 20), 200);
     const runs = jobId ? readRunsForJob(jobId, limit) : readAllRuns(limit);
     res.json(resolveSessionExists(runs));
   });

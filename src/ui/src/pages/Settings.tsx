@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PageHeader } from '../components/ui';
 
+const TOAST_AUTO_DISMISS_MS = 3_500;
+
 // ── Toast ─────────────────────────────────────────────────────────────────────
 interface Toast {
   type: 'success' | 'error';
@@ -10,7 +12,7 @@ interface Toast {
 
 function ToastNotice({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
   useEffect(() => {
-    const t = setTimeout(onDismiss, 3500);
+    const t = setTimeout(onDismiss, TOAST_AUTO_DISMISS_MS);
     return () => clearTimeout(t);
   }, [onDismiss]);
 

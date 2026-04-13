@@ -3,7 +3,7 @@ import { ArrowUpRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useState, useEffect } from 'react';
-import { useFetch, fmtCost, fmtTokens, fmtMs, fmtPct } from '../hooks';
+import { useFetch, fmtCost, fmtCostKpi, fmtTokens, fmtMs, fmtPct } from '../hooks';
 import DataRetentionNote from '../components/DataRetentionNote';
 import {
   PageHeader, Loading, AlertBanner,
@@ -74,22 +74,12 @@ interface Stats {
   first_ts: number; last_ts: number; agents: string[];
 }
 
-interface TokenBreakdown {
-  input: number; output: number; cache_read: number; cache_write: number;
-  total: number; messages: number;
-}
-
 interface KPI {
-  today: number; this_week: number; this_month: number; all_time: number;
-  avg_daily_30d: number; cache_hit_rate: number;
-  cache_read_total: number; cache_write_total: number; input_total: number;
-  last_week_cost: number; week_change_pct: number;
-  avg_cost_per_session: number;
-  sparkline_7d: number[];
-  tokens?: {
-    today: TokenBreakdown; this_week: TokenBreakdown;
-    this_month: TokenBreakdown; all_time: TokenBreakdown;
-  };
+  today: number;
+  cache_hit_rate: number;
+  last_week_cost: number;
+  week_change_pct: number;
+  tokens?: { today: { total: number } };
 }
 
 interface ModelRow {
@@ -105,8 +95,6 @@ interface AgentInfo {
   status: string;
   last_activity_ts: number;
   primary_model: string | null;
-  error_rate: number;
-  cache_hit_rate: number;
   health: { status: string; reasons: string[] };
   current_task: { text: string; source: string; session_id: string } | null;
   last_session: { ok: boolean; context_pct: number | null } | null;
@@ -144,7 +132,7 @@ interface CronRun {
 }
 
 interface TokensSummary {
-  totals: { total: number; input: number; output: number; cacheRead: number; cacheWrite: number; cost: number };
+  totals: { total: number; input: number; output: number; cacheRead: number; cacheWrite: number; cost: number; cacheHitRate: number };
   cronVsManual?: {
     cron: { tokens: number; cost: number; sessions: number };
     manual: { tokens: number; cost: number; sessions: number };
@@ -207,19 +195,24 @@ export default function Overview() {
 
   /* ── Derived values ──────────────────────────────────────────────── */
 
-  // Use the backend-computed cache hit rate (correct formula excludes cache_write)
-  const hitRate = kpi.cache_hit_rate ?? 0;
+  // Cache hit rate is displayed alongside 7d KPIs, so read the 7d value from
+  // /api/tokens/summary (period-scoped). The older /api/timeline/kpi.cache_hit_rate
+  // is all-time and doesn't match the neighbouring "today / 7d" labels.
+  const hitRate = tokens7d?.totals?.cacheHitRate ?? 0;
 
   const topModels = (models || []).filter(m => m.model !== 'delivery-mirror');
 
-  // Error sessions (same logic as Sessions page: count sessions with error_count > 0)
+  // Error sessions / counts — use last_message_at so that a session which spans midnight
+  // counts as "today" based on its most recent activity, matching the backend semantics
+  // in /api/stats/agents and /api/tokens/summary (which bucket by message timestamp).
   const d7 = Date.now() - 7 * 86_400_000;
   const todayMid = new Date(); todayMid.setHours(0, 0, 0, 0);
+  const activeTs = (s: SessionRow) => s.last_message_at ?? s.started_at;
   const errorSessionsToday = sessions
-    ? sessions.filter(s => s.error_count > 0 && s.started_at >= todayMid.getTime()).length
+    ? sessions.filter(s => s.error_count > 0 && activeTs(s) >= todayMid.getTime()).length
     : 0;
   const errorSessions7d = sessions
-    ? sessions.filter(s => s.error_count > 0 && s.started_at >= d7).length
+    ? sessions.filter(s => s.error_count > 0 && activeTs(s) >= d7).length
     : 0;
   const warningAgents = agents ? agents.filter(a => a.health.status === 'warning').length : 0;
   const errorAgents = agents ? agents.filter(a => a.health.status === 'error').length : 0;
@@ -251,10 +244,13 @@ export default function Overview() {
     }
   });
 
-  // Session/message counts (7d and today)
-  const sessions7d = sessions ? sessions.filter(s => s.started_at >= d7).length : 0;
-  const sessionsToday = sessions ? sessions.filter(s => s.started_at >= todayMid.getTime()).length : 0;
-  const messages7d = sessions ? sessions.filter(s => s.started_at >= d7).reduce((sum, s) => sum + s.total_messages, 0) : 0;
+  // Session/message counts (7d and today) — bucketed by last activity, not session start.
+  // sessions.total_messages is now assistant-only non-synthetic (post-parser fix),
+  // matching the canonical definition in /api/stats and /api/stats/agents.
+  const sessions7d = sessions ? sessions.filter(s => activeTs(s) >= d7).length : 0;
+  const sessionsToday = sessions ? sessions.filter(s => activeTs(s) >= todayMid.getTime()).length : 0;
+  const messages7d = sessions ? sessions.filter(s => activeTs(s) >= d7).reduce((sum, s) => sum + s.total_messages, 0) : 0;
+  const messagesToday = sessions ? sessions.filter(s => activeTs(s) >= todayMid.getTime()).reduce((sum, s) => sum + s.total_messages, 0) : 0;
 
   // Agent status counts
   const agentRunning = agents ? agents.filter(a => a.status === 'running' || a.status === 'stuck').length : 0;
@@ -289,10 +285,10 @@ export default function Overview() {
         {/* 1. Cost */}
         <Link to="/tokens" style={navLink} className="nav-kpi">
           <div className="kpi" style={{ cursor: 'pointer' }}>
-            <div className="kv" style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtCost(kpi.today)}</div>
+            <div className="kv" style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtCostKpi(kpi.today)}</div>
             <div className="kl">{t('overview.costToday')} {arrow}</div>
             <div className="ks" style={{ fontVariantNumeric: 'tabular-nums' }}>
-              <span style={{ fontSize: 11 }}>7d: {fmtCost(tokens7d?.totals?.cost ?? 0)}</span>
+              <span style={{ fontSize: 11 }}>7d: {fmtCostKpi(tokens7d?.totals?.cost ?? 0)}</span>
               {kpi.last_week_cost > 0 && (
                 <div style={{
                   fontSize: 11,
@@ -328,9 +324,9 @@ export default function Overview() {
         <Link to="/sessions" style={navLink} className="nav-kpi">
           <div className="kpi" style={{ cursor: 'pointer' }}>
             <div className="kv" style={{ fontVariantNumeric: 'tabular-nums' }}>{sessionsToday}</div>
-            <div className="kl">{t('overview.sessionsToday')} {arrow}</div>
+            <div className="kl">{t('overview.sessionsToday')} · {messagesToday.toLocaleString()} {t('overview.msg')} {arrow}</div>
             <div className="ks" style={{ fontVariantNumeric: 'tabular-nums' }}>
-              <span style={{ fontSize: 11 }}>7d: {sessions7d} · {messages7d.toLocaleString()} {t('overview.msg')}</span>
+              <span style={{ fontSize: 11 }}>7d: {sessions7d} {t('overview.sessions')} · {messages7d.toLocaleString()} {t('overview.msg')}</span>
             </div>
           </div>
         </Link>
@@ -409,28 +405,29 @@ export default function Overview() {
                   onMouseLeave={e => (e.currentTarget.style.background = 'var(--surface2)')}
                 >
                   <StatusDot color={HEALTH_COLOR[hs] ?? 'var(--muted)'} glow={hs === 'error'} size={7} />
-                  <span style={{ fontWeight: 600, minWidth: 60 }}>{a.agent_name}</span>
-                  <Badge variant={HEALTH_VARIANT[hs] ?? 'neutral'}>{t(`common.${hs}` as never, hs)}</Badge>
-                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                  <span style={{ fontWeight: 600, width: 72, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.agent_name}</span>
+                  <span style={{ width: 64, flexShrink: 0 }}><Badge variant={HEALTH_VARIANT[hs] ?? 'neutral'}>{t(`common.${hs}` as never, hs)}</Badge></span>
+                  <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {a.primary_model?.replace('claude-', '').replace('-latest', '') ?? '—'}
                   </span>
-                  <span style={{ flex: 1 }} />
-                  <span style={{ fontSize: 11, color: 'var(--C-blue)', fontVariantNumeric: 'tabular-nums' }}>
-                    {fmtCost(a.today?.cost ?? 0)}
+                  <span style={{ fontSize: 11, color: 'var(--C-blue)', fontVariantNumeric: 'tabular-nums', width: 48, textAlign: 'right', flexShrink: 0 }}>
+                    {fmtCostKpi(a.today?.cost ?? 0)}
                   </span>
-                  {ctxPct !== null && (
-                    <ProgressBar
-                      value={ctxPct} max={100} width={40} height={4}
-                      color={ctxPct > 80 ? 'var(--C-rose)' : ctxPct > 50 ? 'var(--C-amber)' : 'var(--C-green)'}
-                    />
-                  )}
+                  <span style={{ width: 40, flexShrink: 0 }}>
+                    {ctxPct !== null && (
+                      <ProgressBar
+                        value={ctxPct} max={100} width={40} height={4}
+                        color={ctxPct > 80 ? 'var(--C-rose)' : ctxPct > 50 ? 'var(--C-amber)' : 'var(--C-green)'}
+                      />
+                    )}
+                  </span>
                   {(() => {
                     const sc = a.status === 'running' ? '#22c55e'
                       : a.status === 'stuck' ? '#eab308'
                       : a.status === 'idle' ? '#60a5fa'
                       : '#888';
                     return (
-                      <span style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums', textAlign: 'right', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums', textAlign: 'right', width: 100, flexShrink: 0, whiteSpace: 'nowrap' }}>
                         <span style={{ color: 'var(--muted)' }}>{relTime(a.last_activity_ts, t)}</span>
                         {' '}
                         <span style={{ color: sc, fontWeight: 500, fontSize: 10 }}>{t(`common.${a.status}` as never)}</span>
@@ -502,8 +499,8 @@ export default function Overview() {
                           <div style={{
                             fontSize: 11, fontVariantNumeric: 'tabular-nums', textAlign: 'left', flexShrink: 0,
                           }}>
-                            <div><span style={{ color: 'var(--C-blue)' }}>{fmtCost(todayCost)}</span><span style={{ color: 'var(--muted)' }}> (today)</span></div>
-                            <div style={{ marginTop: 3 }}><span style={{ color: 'var(--text)' }}>{fmtCost(weekCost)}</span><span style={{ color: 'var(--muted)' }}> (7d)</span></div>
+                            <div><span style={{ color: 'var(--C-blue)' }}>{fmtCostKpi(todayCost)}</span><span style={{ color: 'var(--muted)' }}> (today)</span></div>
+                            <div style={{ marginTop: 3 }}><span style={{ color: 'var(--text)' }}>{fmtCostKpi(weekCost)}</span><span style={{ color: 'var(--muted)' }}> (7d)</span></div>
                           </div>
                         </div>
                       </div>
@@ -577,8 +574,8 @@ export default function Overview() {
             {nextCronRun && <span> · {t('overview.nextRun')} {relTime(nextCronRun, t)}</span>}
           </div>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 'var(--space-3)', fontVariantNumeric: 'tabular-nums' }}>
-            {t('overview.failures')} <span style={{ color: cronFailsToday > 0 ? 'var(--C-rose)' : 'var(--muted)', fontWeight: cronFailsToday > 0 ? 500 : 400 }}>{cronFailsToday} {t('common.today')}</span>
-            {' · '}<span style={{ color: cronFails7d > 0 ? 'var(--C-amber)' : 'var(--muted)', fontWeight: cronFails7d > 0 ? 500 : 400 }}>{cronFails7d} {t('overview.last7d')}</span>
+            {t('overview.failures')} <span style={{ color: cronFailsToday > 0 ? 'var(--C-rose)' : 'var(--muted)', fontWeight: cronFailsToday > 0 ? 500 : 400 }}>{t('common.today')} {cronFailsToday}</span>
+            {' · '}<span style={{ color: cronFails7d > 0 ? 'var(--C-amber)' : 'var(--muted)', fontWeight: cronFails7d > 0 ? 500 : 400 }}>{t('overview.last7d')} {cronFails7d}</span>
           </div>
           {cronEnabled.length === 0 ? (
             <div style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center', padding: 'var(--space-4)' }}>{t('overview.noCronJobs')}</div>
@@ -640,8 +637,8 @@ export default function Overview() {
                   <div className="ss" style={{ flex: cvm.manual.tokens / total, background: 'var(--C-blue)' }} />
                 </div>
                 <div style={{ display: 'flex', gap: 'var(--space-4)', fontSize: 11, color: 'var(--muted)' }}>
-                  <span><span style={{ color: 'var(--C-violet)' }}>{'■'}</span> {t('overview.cronLabel')} {fmtPct(cvm.cron.tokens / total, 0)} · {fmtCost(cvm.cron.cost)}</span>
-                  <span><span style={{ color: 'var(--C-blue)' }}>{'■'}</span> {t('overview.manualLabel')} {fmtPct(cvm.manual.tokens / total, 0)} · {fmtCost(cvm.manual.cost)}</span>
+                  <span><span style={{ color: 'var(--C-violet)' }}>{'■'}</span> {t('overview.cronLabel')} {fmtPct(cvm.cron.tokens / total, 0)} · {fmtCostKpi(cvm.cron.cost)}</span>
+                  <span><span style={{ color: 'var(--C-blue)' }}>{'■'}</span> {t('overview.manualLabel')} {fmtPct(cvm.manual.tokens / total, 0)} · {fmtCostKpi(cvm.manual.cost)}</span>
                 </div>
               </div>
             );
@@ -791,12 +788,12 @@ export default function Overview() {
                 <ComposedChart data={tdata} barCategoryGap="35%">
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--muted)' }} axisLine={false} tickLine={false} />
-                  <YAxis yAxisId="cost" orientation="left" tick={{ fontSize: 10, fill: 'var(--muted)' }} axisLine={false} tickLine={false} width={36} tickFormatter={(v: number) => fmtCost(v)} />
+                  <YAxis yAxisId="cost" orientation="left" tick={{ fontSize: 10, fill: 'var(--muted)' }} axisLine={false} tickLine={false} width={36} tickFormatter={(v: number) => fmtCostKpi(v)} />
                   <YAxis yAxisId="tok" orientation="right" tick={{ fontSize: 10, fill: 'var(--muted)' }} axisLine={false} tickLine={false} width={36} tickFormatter={(v: number) => fmtTokens(v)} />
                   <Tooltip
                     cursor={{ fill: 'transparent' }}
                     contentStyle={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 11 }}
-                    formatter={(v: any, name: any) => name === 'cost_total' ? [fmtCost(v), costLabel] : [fmtTokens(v), tokLabel]}
+                    formatter={(v: any, name: any) => name === 'cost_total' ? [fmtCostKpi(v), costLabel] : [fmtTokens(v), tokLabel]}
                   />
                   <Bar yAxisId="cost" dataKey="cost_total" fill="var(--C-blue)" radius={[2, 2, 0, 0]} />
                   <Line yAxisId="tok" type="monotone" dataKey="total_tokens" stroke="var(--C-amber)" strokeWidth={2} dot={{ r: 3, fill: 'var(--C-amber)' }} activeDot={{ r: 4 }} />

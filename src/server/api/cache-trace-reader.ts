@@ -151,7 +151,9 @@ export function readCacheTraceAllStages(sessionId: string): {
   if (!fs.existsSync(CACHE_TRACE_PATH)) return { available: false, runs: [] };
   try {
     const raw = fs.readFileSync(CACHE_TRACE_PATH, 'utf8');
-    const lines = raw.split('\n').filter(l => l.trim()).slice(0, MAX_LINES);
+    // Keep the TAIL (most recent) of the file. `.slice(0, N)` would keep the
+    // head, dropping newly-appended entries once the file exceeds MAX_LINES.
+    const lines = raw.split('\n').filter(l => l.trim()).slice(-MAX_LINES);
 
     // Collect all entries for this session, grouped by runId
     const byRun = new Map<string, CacheTraceEntryFull[]>();
@@ -292,7 +294,8 @@ export function readCacheTraceAllStages(sessionId: string): {
           tCacheRead += u.cacheRead ?? 0;
           tCacheWrite += u.cacheWrite ?? 0;
           const c = u.cost;
-          if (c && typeof c === 'object') tCost += c.total ?? 0;
+          // Clamp negative sentinel costs (OpenRouter emits -token_count when price is unknown)
+          if (c && typeof c === 'object') tCost += Math.max(0, c.total ?? 0);
         }
         if (callCount > 0) {
           turnUsage = {
@@ -350,7 +353,9 @@ export function readCacheTrace(): {
   try {
     const stat = fs.statSync(CACHE_TRACE_PATH);
     const raw = fs.readFileSync(CACHE_TRACE_PATH, 'utf8');
-    const lines = raw.split('\n').filter(l => l.trim()).slice(0, MAX_LINES);
+    // Keep the TAIL (most recent) of the file. `.slice(0, N)` would keep the
+    // head, dropping newly-appended entries once the file exceeds MAX_LINES.
+    const lines = raw.split('\n').filter(l => l.trim()).slice(-MAX_LINES);
 
     // Group by runId, collecting session:loaded (seq=1) and first stream:context (min seq)
     const byRun = new Map<string, {

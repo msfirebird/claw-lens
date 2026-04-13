@@ -173,16 +173,34 @@ export function profilerRouter(db: Database.Database): Router {
     return best;
   }
 
-  // GET /api/profiler/loops
-  r.get('/loops', (_req: Request, res: Response) => {
+  // GET /api/profiler/loops?agent=&from=&to=
+  r.get('/loops', (req: Request, res: Response) => {
     const WARN_DEPTH  = 8;   // ≥8 LLM calls in one user turn → flag
     const ERROR_DEPTH = 15;  // ≥15 → severe
 
+    const agentFilter = req.query.agent as string | undefined;
+    const fromFilter = req.query.from ? Number(req.query.from) : undefined;
+    const toFilter   = req.query.to   ? Number(req.query.to)   : undefined;
+
+    // Load all messages for sessions that overlap the requested window. We filter at the
+    // session level (started_at) so that turn boundaries stay intact — filtering messages
+    // mid-turn would corrupt the depth counter.
+    const sessionWheres: string[] = [];
+    const sessionParams: (string | number)[] = [];
+    if (agentFilter) { sessionWheres.push('s.agent_name = ?'); sessionParams.push(agentFilter); }
+    if (fromFilter)  { sessionWheres.push('s.started_at >= ?'); sessionParams.push(fromFilter); }
+    if (toFilter)    { sessionWheres.push('s.started_at <= ?'); sessionParams.push(toFilter); }
+    const sessionJoin = sessionWheres.length > 0 ? 'JOIN sessions s ON s.id = m.session_id' : '';
+    const sessionWhereClause = sessionWheres.length > 0 ? 'AND ' + sessionWheres.join(' AND ') : '';
+
     const msgs = db.prepare(`
-      SELECT id, session_id, agent_name, role, timestamp, stop_reason, cost_total, is_tool_result
-      FROM messages
-      ORDER BY session_id, timestamp ASC
-    `).all() as Array<{
+      SELECT m.id, m.session_id, m.agent_name, m.role, m.timestamp, m.stop_reason, m.cost_total, m.is_tool_result
+      FROM messages m
+      ${sessionJoin}
+      WHERE (m.model IS NULL OR m.model NOT IN ('delivery-mirror', 'gateway-injected'))
+      ${sessionWhereClause}
+      ORDER BY m.session_id, m.timestamp ASC
+    `).all(...sessionParams) as Array<{
       id: string; session_id: string; agent_name: string;
       role: string; timestamp: number; stop_reason: string | null;
       cost_total: number; is_tool_result: number;

@@ -39,9 +39,12 @@ export function buildBaseline(db: Database.Database, agentId: string): AgentBase
     .slice(0, 20)
     .map(([p]) => p);
 
-  // Typical hours
+  // Typical hours — MUST use 'localtime' modifier to match anomaly.ts which uses
+  // `new Date(ts).getHours()` (local). Without 'localtime', baseline stores UTC
+  // hours while the check compares against local hours → off-by-TZ-offset, and
+  // every audit event gets falsely flagged as 'anomaly_hour'.
   const hourRows = db.prepare(`
-    SELECT CAST(strftime('%H', timestamp/1000, 'unixepoch') AS INTEGER) as hr, COUNT(*) as cnt
+    SELECT CAST(strftime('%H', timestamp/1000, 'unixepoch', 'localtime') AS INTEGER) as hr, COUNT(*) as cnt
     FROM audit_events WHERE agent_id = ? AND timestamp > ?
     GROUP BY hr ORDER BY cnt DESC
   `).all(agentId, cutoff) as { hr: number; cnt: number }[];

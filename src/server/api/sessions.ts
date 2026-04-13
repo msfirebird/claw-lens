@@ -87,12 +87,16 @@ export function sessionsRouter(db: Database.Database): Router {
 
     const lastMsgStmt = db.prepare(`
       SELECT input_tokens, cache_read, cache_write, timestamp
-      FROM messages WHERE session_id = ? AND role = 'assistant' AND (input_tokens + cache_read + cache_write) > 0
+      FROM messages WHERE session_id = ? AND role = 'assistant'
+        AND model NOT IN ('delivery-mirror', 'gateway-injected')
+        AND (input_tokens + cache_read + cache_write) > 0
       ORDER BY timestamp DESC LIMIT 1
     `);
     const last3Stmt = db.prepare(`
       SELECT input_tokens, cache_read, cache_write, timestamp
-      FROM messages WHERE session_id = ? AND role = 'assistant' AND (input_tokens + cache_read + cache_write) > 0
+      FROM messages WHERE session_id = ? AND role = 'assistant'
+        AND model NOT IN ('delivery-mirror', 'gateway-injected')
+        AND (input_tokens + cache_read + cache_write) > 0
       ORDER BY timestamp DESC LIMIT 3
     `);
 
@@ -124,126 +128,6 @@ export function sessionsRouter(db: Database.Database): Router {
     });
 
     res.json(enriched);
-  });
-
-  // GET /api/sessions/context-health — active session context utilization
-  r.get('/context-health', (_req: Request, res: Response) => {
-    const now = Date.now();
-    const cutoff = now - 24 * 60 * 60 * 1000; // 24 hours
-
-    // Sessions with at least one message in the last 24h
-    const rows = db.prepare(`
-      SELECT
-        s.id,
-        s.agent_name,
-        s.primary_model,
-        (SELECT MAX(m0.timestamp) FROM messages m0 WHERE m0.session_id = s.id) AS last_active_at
-      FROM sessions s
-      WHERE (SELECT MAX(m0.timestamp) FROM messages m0 WHERE m0.session_id = s.id) >= ?
-      ORDER BY last_active_at DESC
-    `).all(cutoff) as Array<{
-      id: string;
-      agent_name: string;
-      primary_model: string | null;
-      last_active_at: number;
-    }>;
-
-    // getContextLimit imported from ../model-meta
-
-    // For each session, get last assistant message context size + burn rate from last 3
-    const lastMsgStmt = db.prepare(`
-      SELECT input_tokens, cache_read, cache_write, timestamp
-      FROM messages
-      WHERE session_id = ? AND role = 'assistant' AND (input_tokens + cache_read + cache_write) > 0
-      ORDER BY timestamp DESC
-      LIMIT 1
-    `);
-
-    const last3Stmt = db.prepare(`
-      SELECT input_tokens, cache_read, cache_write, timestamp
-      FROM messages
-      WHERE session_id = ? AND role = 'assistant' AND (input_tokens + cache_read + cache_write) > 0
-      ORDER BY timestamp DESC
-      LIMIT 3
-    `);
-
-    const sessions = rows.map(row => {
-      const model = row.primary_model ?? '';
-      const contextLimit = getContextLimit(model);
-      const warnThreshold = Math.floor(contextLimit * 0.7);
-      const criticalThreshold = Math.floor(contextLimit * 0.9);
-
-      // Current context size from last assistant message
-      const lastMsg = lastMsgStmt.get(row.id) as {
-        input_tokens: number; cache_read: number; cache_write: number; timestamp: number;
-      } | undefined;
-
-      const contextUsed = lastMsg
-        ? lastMsg.input_tokens + lastMsg.cache_read + lastMsg.cache_write
-        : 0;
-      const utilizationPct = contextLimit > 0
-        ? Math.round((contextUsed / contextLimit) * 1000) / 10
-        : 0;
-
-      // Status
-      let status: 'ok' | 'warning' | 'critical' = 'ok';
-      if (contextUsed > criticalThreshold) status = 'critical';
-      else if (contextUsed > warnThreshold) status = 'warning';
-
-      // Burn rate from last 3 messages
-      const last3 = (last3Stmt.all(row.id) as Array<{
-        input_tokens: number; cache_read: number; cache_write: number; timestamp: number;
-      }>).reverse(); // oldest first
-
-      let burnRate: 'rising' | 'stable' | 'cooling' | 'unknown' = 'unknown';
-      let burnRateTokensPerMin = 0;
-
-      if (last3.length >= 3) {
-        const sizes = last3.map(m => m.input_tokens + m.cache_read + m.cache_write);
-        const growth0 = sizes[1] - sizes[0];
-        const growth1 = sizes[2] - sizes[1];
-        const avgGrowthPerMsg = (growth0 + growth1) / 2;
-        const threshold = contextLimit * 0.005; // 0.5% of context per message — consistent with session list
-        if (avgGrowthPerMsg > threshold) burnRate = 'rising';
-        else if (avgGrowthPerMsg < -threshold) burnRate = 'cooling';
-        else burnRate = 'stable';
-
-        const elapsedMin = (last3[last3.length - 1].timestamp - last3[0].timestamp) / 60000;
-        if (elapsedMin > 0) {
-          burnRateTokensPerMin = Math.round(((sizes[sizes.length - 1] - sizes[0]) / elapsedMin) * 10) / 10;
-        }
-      } else if (last3.length >= 2) {
-        burnRate = 'unknown';
-        const sizes = last3.map(m => m.input_tokens + m.cache_read + m.cache_write);
-        const elapsedMin = (last3[last3.length - 1].timestamp - last3[0].timestamp) / 60000;
-        if (elapsedMin > 0) {
-          burnRateTokensPerMin = Math.round(((sizes[sizes.length - 1] - sizes[0]) / elapsedMin) * 10) / 10;
-        }
-      }
-
-      // Derive sessionKey and provider from available data
-      const sessionKey = `agent:${row.agent_name}:${row.id.slice(0, 8)}`;
-      const provider = model.toLowerCase().includes('gpt') ? 'openai' : 'anthropic';
-
-      return {
-        id: row.id,
-        agent: row.agent_name,
-        sessionKey,
-        model: model || 'unknown',
-        provider,
-        contextUsed,
-        contextLimit,
-        utilizationPct,
-        burnRate,
-        burnRateTokensPerMin,
-        warnThreshold,
-        criticalThreshold,
-        status,
-        lastActiveAt: row.last_active_at,
-      };
-    });
-
-    res.json({ sessions });
   });
 
   // GET /api/sessions/:id/trace — live turn-by-turn trace parsed from JSONL
@@ -376,11 +260,18 @@ export function sessionsRouter(db: Database.Database): Router {
               ? (msg.content as ContentBlock[]).filter(b => b.type === 'text').map(b => (b.text as string) ?? '').filter(Boolean).join('\n')
               : typeof msg.content === 'string' ? msg.content as string : null;
             const rawResult = aggregated ?? contentText ?? null;
-            const isError   = msg.isError as boolean | undefined;
+            // Real failure signal lives in details.status — msg.isError is almost
+            // always false even for errored/failed/timed-out tools. Keep isError as
+            // a last-resort fallback when details.status is missing.
+            const status = details?.status;
+            const FAILED_STATUSES_TR = new Set(['error', 'failed', 'timeout', 'approval-unavailable']);
+            const isError = msg.isError as boolean | undefined;
+            const toolFailed = typeof status === 'string' && FAILED_STATUSES_TR.has(status)
+              || (status === undefined && Boolean(isError));
             if (toolCallId) {
               const tool = lastTurn.tools.find(t => t.id === toolCallId);
               if (tool) {
-                if (isError !== undefined) tool.success = !isError;
+                tool.success = !toolFailed;
                 if (rawResult) tool.result_preview = rawResult.length > 500 ? rawResult.slice(0, 500) + '…' : rawResult;
               }
             }
@@ -466,6 +357,8 @@ export function sessionsRouter(db: Database.Database): Router {
 
   // GET /api/sessions/:id/messages — per-message token timeline with seq and latency
   r.get('/:id/messages', (req: Request, res: Response) => {
+    // Hide assistant rows from synthetic models (delivery-mirror, gateway-injected)
+    // but keep user rows (which have empty model). Matches modelBreakdown above.
     const rows = db.prepare(`
       SELECT
         id, role, model, timestamp, parent_id,
@@ -474,6 +367,7 @@ export function sessionsRouter(db: Database.Database): Router {
         ROW_NUMBER() OVER (ORDER BY timestamp) as seq
       FROM messages
       WHERE session_id = ?
+        AND (role != 'assistant' OR model NOT IN ('delivery-mirror', 'gateway-injected'))
       ORDER BY timestamp ASC
     `).all(req.params.id) as Array<Record<string, unknown>>;
 

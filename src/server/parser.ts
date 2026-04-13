@@ -3,8 +3,12 @@ import * as path from 'path';
 import { glob } from 'glob';
 import { getClawHome } from './paths';
 
-/** stop_reason / stopReason values that mean a session turn is fully closed */
-export const CLOSED_STOP_REASONS = new Set(['end_turn', 'stop', 'error', 'max_tokens']);
+/** stop_reason / stopReason values that mean a session turn is fully closed.
+ *  Values match the pi-ai upstream library that OpenClaw normalizes to:
+ *  'stop' (model finished naturally), 'error' (api/network/provider error),
+ *  'aborted' (user cancelled), 'length' (max_tokens hit). NOT raw Anthropic
+ *  values like 'end_turn' / 'max_tokens' which OpenClaw never emits. */
+export const CLOSED_STOP_REASONS = new Set(['stop', 'error', 'aborted', 'length']);
 
 export interface RawRecord {
   type: string;
@@ -181,11 +185,24 @@ export function parseSessionFile(filePath: string): ParseResult {
     return r.message?.timestamp || new Date(r.timestamp).getTime();
   });
 
-  // ── Build toolResult lookup: toolCallId → { timestamp, durationMs, isError } ──
-  // Tool results appear as user messages with content[].type === 'tool_result'.
-  // Duration comes from record-level `toolUseResult.durationMs` (preferred)
-  // or from `msg.details?.durationMs` (legacy).
-  const toolResultMap = new Map<string, { timestamp: number; durationMs: number | null; isError: boolean; aborted: boolean }>();
+  // ── Build toolResult lookup: toolCallId → { timestamp, durationMs, failed, aborted, dispatchTs } ──
+  // Tool results appear either as legacy `role: 'toolResult'` records (OpenClaw format)
+  // or as `role: 'user'` messages with `tool_result` content items (Anthropic-style modern format).
+  //
+  // Two important real-data findings drive how we derive status here:
+  //
+  //  1. `msg.isError` is unreliable. It's `false` for ~99.9% of records even when the tool
+  //     actually errored, failed, timed out, or had its approval denied. The authoritative
+  //     signal is `details.status`. We classify it manually.
+  //
+  //  2. `details.durationMs` is missing for ~38% of tool calls. The previous fallback
+  //     (toolResult.timestamp - assistant.message.timestamp) overestimated by 30-500x
+  //     because assistant.message.timestamp is the LLM CALL START, not the LLM finish /
+  //     dispatch time. The top-level `r.timestamp` of the assistant record is when the
+  //     response was logged (≈ dispatch time), so we capture it separately.
+  const FAILED_STATUSES = new Set(['error', 'failed', 'timeout', 'approval-unavailable']);
+  const toolResultMap = new Map<string, { timestamp: number; durationMs: number | null; failed: boolean; aborted: boolean }>();
+
   for (const r of messageRecords) {
     const msg = r.message;
     if (!msg) continue;
@@ -195,19 +212,23 @@ export function parseSessionFile(filePath: string): ParseResult {
     // Legacy format: msg.role === 'toolResult' with toolCallId
     if (msg.role === 'toolResult' && msg.toolCallId) {
       const detailDur = msg.details?.durationMs ?? null;
+      const status = msg.details?.status;
       // status === 'running' means the tool was still running when aborted
-      const aborted = msg.details?.status === 'running';
+      const aborted = status === 'running';
+      // Real failure signal is status, not isError. isError is almost always false.
+      const failed = typeof status === 'string' && FAILED_STATUSES.has(status)
+        || (status === undefined && Boolean(msg.isError));
       toolResultMap.set(msg.toolCallId, {
         timestamp: trTs,
         durationMs: typeof detailDur === 'number' && detailDur > 0 ? detailDur : null,
-        isError: Boolean(msg.isError),
+        failed,
         aborted,
       });
       continue;
     }
 
-    // Current format: role='user', content contains tool_result items,
-    // duration in record-level toolUseResult.durationMs
+    // Modern format: role='user', content contains tool_result items.
+    // (Currently unused by OpenClaw — kept for forward compat with Anthropic-style logs.)
     if (msg.role === 'user' && Array.isArray(msg.content)) {
       const recordDur = (r.toolUseResult as Record<string, unknown>)?.durationMs;
       const durMs = typeof recordDur === 'number' && recordDur > 0 ? recordDur : null;
@@ -217,7 +238,7 @@ export function parseSessionFile(filePath: string): ParseResult {
           toolResultMap.set(item.tool_use_id, {
             timestamp: trTs,
             durationMs: durMs,
-            isError: Boolean(item.is_error),
+            failed: Boolean(item.is_error),
             aborted: false,
           });
         }
@@ -289,6 +310,9 @@ export function parseSessionFile(filePath: string): ParseResult {
     // Extract tool calls from content
     const rawContent = msg.content || [];
     const contentArr: ContentItem[] = Array.isArray(rawContent) ? rawContent : [];
+    // Top-level r.timestamp ≈ when the assistant response was logged ≈ tool dispatch start.
+    // Used as the baseline for duration fallback (NOT msg.timestamp which is LLM call start).
+    const dispatchTs = new Date(r.timestamp).getTime();
     const msgToolCalls: ParsedToolCall[] = contentArr
       .filter((item: ContentItem) => (item.type === 'toolCall' || item.type === 'tool_use') && item.id && item.name)
       .map(item => {
@@ -302,14 +326,18 @@ export function parseSessionFile(filePath: string): ParseResult {
             // Exact runtime measurement from the tool itself
             durationMs = trData.durationMs;
           } else {
-            // Fallback: toolResult timestamp - assistant message timestamp
-            const raw = trData.timestamp - ts;
+            // Fallback: toolResult timestamp - dispatch time (LLM finish, not LLM start).
+            // Real-data validation: this is accurate to ~25 ms (vs 9 sec error using
+            // assistant.msg.timestamp as the baseline).
+            const raw = trData.timestamp - dispatchTs;
             durationMs = raw > 0 ? raw : null;
           }
-          success = trData.isError ? 0 : 1;
+          // Real failure signal is status (captured into trData.failed), not isError.
+          success = trData.failed ? 0 : 1;
         }
-        // No matching toolResult, or tool was aborted (status='running') →
-        // no reliable duration. Leave durationMs as null.
+        // Aborted tools (status='running') have no reliable duration → leave null,
+        // and mark as not-success since they didn't complete.
+        if (trData?.aborted) success = 0;
 
         const tc: ParsedToolCall = {
           id: item.id!,
@@ -354,6 +382,10 @@ function buildSession(
   const totalCost = realMessages.reduce((sum, m) => sum + m.costTotal, 0);
   const totalTokens = realMessages.reduce((sum, m) => sum + m.totalTokens, 0);
   const errorCount = realMessages.filter(m => m.hasError).length;
+  // Canonical "message count" = assistant messages from real (billable) models.
+  // All API endpoints already aggregate with role='assistant' AND model NOT IN synthetic,
+  // so sessions.total_messages must use the same definition to stay consistent.
+  const assistantMessageCount = realMessages.filter(m => m.role === 'assistant').length;
 
   // Primary model: last assistant message's model
   const lastAssistantModel = [...messages]
@@ -394,7 +426,7 @@ function buildSession(
     agentName,
     startedAt,
     endedAt,
-    totalMessages: messages.length,
+    totalMessages: assistantMessageCount,
     totalCost,
     totalTokens,
     primaryModel,

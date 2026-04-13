@@ -1,5 +1,3 @@
-import Database from 'better-sqlite3';
-
 // Critical: destructive or system-altering commands
 const CRITICAL_CMD_PATTERNS: RegExp[] = [
   /\brm\s+-[^\s]*r[^\s]*f/,         // rm -rf
@@ -128,6 +126,12 @@ export function resolveEventType(toolName: string, args: Record<string, unknown>
 export function resolveTarget(toolName: string, args: Record<string, unknown>): string {
   if (args.path) return String(args.path);
   if (args.file_path) return String(args.file_path);
+  // `image` tool uses `args.images: string[]` — take the first path so the
+  // downstream sensitive-path check at least evaluates one of them. (Per-item
+  // scanning would require restructuring the event pipeline to emit N events.)
+  if (Array.isArray(args.images) && args.images.length > 0) {
+    return String((args.images as unknown[])[0] ?? '');
+  }
   if (args.url) return String(args.url);
   if (args.query) return String(args.query);
   if (args.command) return String(args.command).slice(0, 200);
@@ -152,36 +156,3 @@ export function resolveExtra(
   return {};
 }
 
-export function calculateDailyRiskScore(
-  db: Database.Database,
-  agentId: string,
-  date: string
-): { score: number; sensitivePathCount: number; externalCallCount: number; sensitiveFindingCount: number; anomalyCount: number } {
-  const events = db.prepare(`
-    SELECT risk_score, risk_flags, event_type FROM audit_events
-    WHERE agent_id = ? AND date(timestamp/1000, 'unixepoch') = ?
-  `).all(agentId, date) as { risk_score: number; risk_flags: string; event_type: string }[];
-
-  let sensitivePathCount = 0;
-  let externalCallCount = 0;
-  let highCount = 0;
-  let anomalyCount = 0;
-
-  for (const e of events) {
-    let flags: string[] = []; try { flags = JSON.parse(e.risk_flags || '[]') ?? []; } catch { /* skip malformed */ }
-    if (flags.some(f => f.startsWith('sensitive_path'))) sensitivePathCount++;
-    if (e.event_type === 'web_fetch' || e.event_type === 'web_search') externalCallCount++;
-    if (e.risk_score === 3) highCount++;
-    if (flags.some(f => f.startsWith('anomaly'))) anomalyCount++;
-  }
-
-  const findingRow = db.prepare(`
-    SELECT COUNT(*) as cnt FROM sensitive_findings
-    WHERE agent_id = ? AND date(timestamp/1000, 'unixepoch') = ? AND dismissed = 0
-  `).get(agentId, date) as { cnt: number };
-
-  const sensitiveFindingCount = findingRow?.cnt || 0;
-  const score = Math.min(100, sensitivePathCount * 5 + highCount * 10 + sensitiveFindingCount * 15 + anomalyCount * 3 + externalCallCount * 1);
-
-  return { score, sensitivePathCount, externalCallCount, sensitiveFindingCount, anomalyCount };
-}

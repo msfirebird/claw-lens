@@ -17,8 +17,6 @@ export function timelineRouter(db: Database.Database): Router {
       : req.query.from ? Number(req.query.from) : undefined;
     const to = req.query.to ? Number(req.query.to) : undefined;
 
-    const divisor = bucket === 'day' ? 86400000 : 3600000;
-
     let where = `WHERE role = 'assistant' AND model NOT IN ('delivery-mirror', 'gateway-injected')`;
     const params: (number | string)[] = [];
 

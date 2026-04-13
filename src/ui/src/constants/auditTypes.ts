@@ -76,10 +76,6 @@ export const PATTERN_LABELS: Record<string, string> = {
   dan_jailbreak:        'Prompt Injection — Jailbreak Attempt',
 };
 
-export const INJECTION_TYPES = new Set([
-  'instruction_override', 'new_instructions', 'role_hijack', 'exfil_request',
-  'exfil_url', 'base64_payload', 'delimiter_escape', 'xml_injection', 'dan_jailbreak',
-]);
 
 /** Map severity string → CSS color variable */
 export function severityColor(s: string): string {

@@ -707,7 +707,7 @@ function SessionPicker({
     ? sessions.filter(s => s.id.includes(q) || s.agent_name.toLowerCase().includes(q))
     : sessions;
 
-  function handleInput(e: React.ChangeEvent<HTMLInputElement>) {
+  function updateSearchQuery(e: React.ChangeEvent<HTMLInputElement>) {
     const v = e.target.value;
     setQuery(v);
     setOpen(true);
@@ -769,7 +769,7 @@ function SessionPicker({
           <input
             ref={inputRef}
             value={query}
-            onChange={handleInput}
+            onChange={updateSearchQuery}
             onFocus={() => setOpen(true)}
             placeholder={selected ? selected.id : t('sessionTimeline.searchPlaceholder')}
             style={{

@@ -110,7 +110,9 @@ function getLastSessionOutcome(agentName: string, db: Database.Database): LastSe
   interface MRow { context_tokens: number; model: string }
   const m = db.prepare(
     `SELECT (input_tokens + cache_read + cache_write) AS context_tokens, model
-     FROM messages WHERE session_id = ? AND role = 'assistant' ORDER BY timestamp DESC LIMIT 1`
+     FROM messages WHERE session_id = ? AND role = 'assistant'
+       AND model NOT IN ('delivery-mirror', 'gateway-injected')
+     ORDER BY timestamp DESC LIMIT 1`
   ).get(s.id) as MRow | undefined;
 
   let context_pct: number | null = null;
@@ -159,14 +161,16 @@ function computeHealth(agentName: string, db: Database.Database): HealthResult {
   interface MsgStats {
     tool_errors: number;
     has_stop_error: number;
-    has_max_tokens: number;
+    has_length: number;
   }
-  // Look at only the last MESSAGE_WINDOW messages in the current session
+  // Look at only the last MESSAGE_WINDOW messages in the current session.
+  // OpenClaw uses pi-ai stop_reason names: 'stop' / 'toolUse' / 'error' / 'aborted' / 'length'.
+  // 'length' is the equivalent of Anthropic's max_tokens (output token limit hit).
   const stats = db.prepare(`
     SELECT
       COALESCE(SUM(has_error), 0)                                          AS tool_errors,
-      MAX(CASE WHEN stop_reason = 'error'      THEN 1 ELSE 0 END)          AS has_stop_error,
-      MAX(CASE WHEN stop_reason = 'max_tokens' THEN 1 ELSE 0 END)          AS has_max_tokens
+      MAX(CASE WHEN stop_reason = 'error'  THEN 1 ELSE 0 END)              AS has_stop_error,
+      MAX(CASE WHEN stop_reason = 'length' THEN 1 ELSE 0 END)              AS has_length
     FROM (
       SELECT has_error, stop_reason
       FROM messages
@@ -184,8 +188,8 @@ function computeHealth(agentName: string, db: Database.Database): HealthResult {
   if (reasons.length > 0) return { status: 'error', reasons };
 
   // Warning conditions
-  if (stats.tool_errors >= 1)     reasons.push(`${stats.tool_errors} tool failure in last ${MESSAGE_WINDOW} messages`);
-  if (stats.has_max_tokens === 1) reasons.push('hit max_tokens — context limit reached');
+  if (stats.tool_errors >= 1) reasons.push(`${stats.tool_errors} tool failure in last ${MESSAGE_WINDOW} messages`);
+  if (stats.has_length === 1) reasons.push('hit length limit — model output truncated');
   if (reasons.length > 0) return { status: 'warning', reasons };
 
   return { status: 'healthy', reasons: [] };
@@ -346,14 +350,16 @@ export function statsRouter(db: Database.Database): Router {
               aiText = ((b.text as string) ?? '').trim();
             }
           }
-          if (stop === 'error' || stop === 'max_tokens') {
+          // pi-ai stop_reason values: 'stop' / 'toolUse' / 'error' / 'aborted' / 'length'.
+          // 'length' = max_tokens equivalent (output truncated). 'stop' = normal completion.
+          if (stop === 'error' || stop === 'aborted' || stop === 'length') {
             steps.push({ type: 'error', text: aiText || `stop: ${stop}` });
             lastStepType = 'error';
           } else if (aiText) {
             steps.push({ type: 'ai', text: aiText });
             lastStepType = 'ai';
           }
-          if (stop === 'end_turn' && !aiText && lastStepType !== 'tool') {
+          if (stop === 'stop' && !aiText && lastStepType !== 'tool') {
             steps.push({ type: 'done' });
             lastStepType = 'done';
           }
@@ -415,7 +421,8 @@ export function statsRouter(db: Database.Database): Router {
       const lastStop       = lastStopStmt.get(sessionId) as { stop_reason: string | null } | undefined;
       const hasFailures    = (failures?.cnt ?? 0) > 0
         || lastStop?.stop_reason === 'error'
-        || lastStop?.stop_reason === 'max_tokens';
+        || lastStop?.stop_reason === 'length'
+        || lastStop?.stop_reason === 'aborted';
 
       const idleMs = now - row.mtime_ms;
       const status = idleMs >= IDLE_THRESHOLD
@@ -451,20 +458,23 @@ export function statsRouter(db: Database.Database): Router {
     const modelFilter = req.query.model as string | undefined;
     const fromFilter  = req.query.from  as string | undefined;
 
-    // Build dynamic WHERE clauses
+    // Session-level WHERE conditions — go into outer WHERE
     const sessionWheres: string[] = [];
     const sessionParams: unknown[] = [];
     if (agentFilter) { sessionWheres.push('s.agent_name = ?'); sessionParams.push(agentFilter); }
     if (fromFilter)  { sessionWheres.push('s.started_at >= ?'); sessionParams.push(Number(fromFilter)); }
 
-    const msgWheres: string[] = ["m.role = 'assistant'", "m.model NOT IN ('delivery-mirror', 'gateway-injected')"];
-    const msgParams: unknown[] = [];
-    if (modelFilter) { msgWheres.push('m.model = ?'); msgParams.push(modelFilter); }
+    // Message-level conditions — MUST go into the LEFT JOIN ON clause, not WHERE.
+    // Putting m.* filters in WHERE turns LEFT JOIN into effective INNER JOIN and drops
+    // sessions that have no matching assistant rows from total_sessions.
+    const joinConds: string[] = [
+      "m.role = 'assistant'",
+      "m.model NOT IN ('delivery-mirror', 'gateway-injected')",
+    ];
+    const joinParams: unknown[] = [];
+    if (modelFilter) { joinConds.push('m.model = ?'); joinParams.push(modelFilter); }
 
-    // Combine all conditions into a single WHERE after JOIN
-    const allWheres = [...sessionWheres, ...msgWheres];
-    const allParams = [...sessionParams, ...msgParams];
-    const whereClause = allWheres.length > 0 ? ' WHERE ' + allWheres.join(' AND ') : '';
+    const whereClause = sessionWheres.length > 0 ? ' WHERE ' + sessionWheres.join(' AND ') : '';
 
     const row = db.prepare(`
       SELECT
@@ -476,9 +486,9 @@ export function statsRouter(db: Database.Database): Router {
         MIN(m.timestamp)                                AS first_ts,
         MAX(m.timestamp)                                AS last_ts
       FROM sessions s
-      LEFT JOIN messages m ON m.session_id = s.id
+      LEFT JOIN messages m ON m.session_id = s.id AND ${joinConds.join(' AND ')}
       ${whereClause}
-    `).get(...allParams) as Record<string, unknown>;
+    `).get(...joinParams, ...sessionParams) as Record<string, unknown>;
 
     const toolWheres: string[] = [];
     const toolParams: unknown[] = [];
@@ -626,26 +636,32 @@ export function statsRouter(db: Database.Database): Router {
     `).all() as AgentMsg[];
     const lastMsgMap = new Map(lastMsgRows.map(r => [r.agent_name, r.last_msg_ts]));
 
-    const rows30d = db.prepare(`
-      SELECT agent_name,
-        COUNT(*) as sessions,
-        COALESCE(SUM(total_cost),0) as cost,
-        COALESCE(SUM(error_count),0) as errors,
-        SUM(CASE WHEN error_count > 0 THEN 1 ELSE 0 END) as error_sessions,
-        COALESCE(SUM(total_messages),0) as total_messages
-      FROM sessions WHERE started_at >= ? GROUP BY agent_name
-    `).all(day30) as AgentPeriod[];
+    // Aggregate by MESSAGE timestamp, not session.started_at, so that a session which
+    // started before the window but is still active contributes its in-window activity.
+    // Counts are derived from assistant messages in real (billable) models only — matching
+    // the canonical definition used by /api/tokens/summary and /api/timeline.
+    const periodAggSql = `
+      SELECT s.agent_name,
+        COUNT(DISTINCT s.id)                                           AS sessions,
+        COALESCE(SUM(m.cost_total), 0)                                 AS cost,
+        COALESCE(SUM(m.has_error), 0)                                  AS errors,
+        COUNT(DISTINCT CASE WHEN m.has_error = 1 THEN s.id END)        AS error_sessions,
+        COUNT(m.id)                                                    AS total_messages
+      FROM messages m
+      JOIN sessions s ON m.session_id = s.id
+      WHERE m.timestamp >= ?
+        AND m.role = 'assistant'
+        AND m.model NOT IN ('delivery-mirror', 'gateway-injected')
+      GROUP BY s.agent_name
+    `;
+    const rows30d = db.prepare(periodAggSql).all(day30) as AgentPeriod[];
     const map30d = new Map(rows30d.map(r => [r.agent_name, r]));
 
-    const rows7d = db.prepare(`
-      SELECT agent_name, COUNT(*) as sessions, COALESCE(SUM(total_cost),0) as cost,
-        COALESCE(SUM(total_messages),0) as total_messages,
-        SUM(CASE WHEN error_count > 0 THEN 1 ELSE 0 END) as error_sessions
-      FROM sessions WHERE started_at >= ? GROUP BY agent_name
-    `).all(day7) as AgentPeriod[];
+    const rows7d = db.prepare(periodAggSql).all(day7) as AgentPeriod[];
     const map7d = new Map(rows7d.map(r => [r.agent_name, r]));
 
-    // Cache hit rate (7d): cache_read / (input_tokens + cache_read) per agent
+    // Cache hit rate (7d): cache_read / (input_tokens + cache_read) per agent.
+    // Filter by message timestamp to match rows7d/rows30d semantics.
     interface CacheRow { agent_name: string; cache_read: number; cache_write: number; input_tokens: number }
     const cacheRows7d = db.prepare(`
       SELECT s.agent_name,
@@ -654,7 +670,7 @@ export function statsRouter(db: Database.Database): Router {
         COALESCE(SUM(m.input_tokens), 0)  AS input_tokens
       FROM messages m
       JOIN sessions s ON m.session_id = s.id
-      WHERE s.started_at >= ? AND m.role = 'assistant' AND m.model NOT IN ('delivery-mirror', 'gateway-injected')
+      WHERE m.timestamp >= ? AND m.role = 'assistant' AND m.model NOT IN ('delivery-mirror', 'gateway-injected')
       GROUP BY s.agent_name
     `).all(day7) as CacheRow[];
     const cacheMap7d = new Map(cacheRows7d.map(r => [r.agent_name, r]));
@@ -670,18 +686,23 @@ export function statsRouter(db: Database.Database): Router {
     `).all(dayStart) as AgentPeriod[];
     const mapToday = new Map(rowsToday.map(r => [r.agent_name, r]));
 
-    // Hourly activity: last 24 hours, one slot per hour (slot = floor(ts/3600000))
+    // Hourly activity: last 24 hours, bucketed by MESSAGE timestamp (not session.started_at)
+    // so a long-running session shows up in every hour it emits a message.
     interface HourlyCell { hour_slot: number; sessions: number; error_sessions: number }
     interface AgentHourlyRow { agent_name: string; hour_slot: number; sessions: number; error_sessions: number }
-    const hour12Ago = now - 24 * 3600000;
+    const hour24Ago = now - 24 * 3600000;
     const hourlyRows = db.prepare(`
-      SELECT agent_name,
-        CAST(strftime('%s', started_at / 1000, 'unixepoch', 'localtime') / 3600 AS INTEGER) AS hour_slot,
-        COUNT(*) AS sessions,
-        SUM(CASE WHEN error_count > 0 THEN 1 ELSE 0 END) AS error_sessions
-      FROM sessions WHERE started_at >= ?
-      GROUP BY agent_name, hour_slot
-    `).all(hour12Ago) as AgentHourlyRow[];
+      SELECT s.agent_name,
+        CAST(strftime('%s', m.timestamp / 1000, 'unixepoch', 'localtime') / 3600 AS INTEGER) AS hour_slot,
+        COUNT(DISTINCT s.id) AS sessions,
+        COUNT(DISTINCT CASE WHEN m.has_error = 1 THEN s.id END) AS error_sessions
+      FROM messages m
+      JOIN sessions s ON m.session_id = s.id
+      WHERE m.timestamp >= ?
+        AND m.role = 'assistant'
+        AND m.model NOT IN ('delivery-mirror', 'gateway-injected')
+      GROUP BY s.agent_name, hour_slot
+    `).all(hour24Ago) as AgentHourlyRow[];
     const hourlyMap = new Map<string, HourlyCell[]>();
     for (const row of hourlyRows) {
       if (!hourlyMap.has(row.agent_name)) hourlyMap.set(row.agent_name, []);
@@ -723,7 +744,8 @@ export function statsRouter(db: Database.Database): Router {
       const fileMtimeMs = ingestRow?.mtime_ms ?? null;
       const hasFailures = (failuresRow?.cnt ?? 0) > 0
         || lastStopRow?.stop_reason === 'error'
-        || lastStopRow?.stop_reason === 'max_tokens';
+        || lastStopRow?.stop_reason === 'length'
+        || lastStopRow?.stop_reason === 'aborted';
       const mtimeAge = fileMtimeMs !== null ? now - fileMtimeMs : Infinity;
 
       const status: 'running' | 'stuck' | 'idle' | 'stale' =
@@ -854,40 +876,34 @@ export function statsRouter(db: Database.Database): Router {
       total_cost: number;
       worst_health: 0 | 1 | 2 | null;  // 0=healthy, 1=warning, 2=error, null=no sessions
       error_sessions: number;
-      max_tokens_sessions: number;
-      interrupted_sessions: number;
+      max_tokens_sessions: number;     // sessions where any msg hit length (max_tokens equivalent)
+      interrupted_sessions: number;    // sessions where any msg was aborted
     }
 
+    // Bucket by MESSAGE day, not session.started_at. A long session emits messages on
+    // multiple days; each day should reflect that day's cost/tokens/activity.
+    // pi-ai stop_reason names: 'length' = max_tokens, 'aborted' = interrupted.
     const rows = db.prepare(`
       SELECT
-        date(s.started_at / 1000, 'unixepoch', 'localtime')  AS day,
-        COUNT(DISTINCT s.id)                                   AS sessions,
-        COALESCE(SUM(mc.msg_count), 0)                        AS messages,
-        COALESCE(SUM(s.total_tokens), 0)                      AS total_tokens,
-        COALESCE(SUM(s.total_cost),   0)                      AS total_cost,
-        SUM(CASE WHEN s.error_count > 0 THEN 1 ELSE 0 END)    AS error_sessions,
-        SUM(CASE WHEN EXISTS(
-          SELECT 1 FROM messages m
-          WHERE m.session_id = s.id AND m.stop_reason = 'max_tokens'
-        ) THEN 1 ELSE 0 END)                                  AS max_tokens_sessions,
-        SUM(CASE WHEN EXISTS(
-          SELECT 1 FROM messages m
-          WHERE m.session_id = s.id AND m.stop_reason = 'interrupted'
-        ) THEN 1 ELSE 0 END)                                  AS interrupted_sessions,
+        date(m.timestamp / 1000, 'unixepoch', 'localtime')             AS day,
+        COUNT(DISTINCT m.session_id)                                    AS sessions,
+        COUNT(m.id)                                                     AS messages,
+        COALESCE(SUM(m.total_tokens), 0)                                AS total_tokens,
+        COALESCE(SUM(m.cost_total),   0)                                AS total_cost,
+        COUNT(DISTINCT CASE WHEN m.has_error = 1 THEN m.session_id END) AS error_sessions,
+        COUNT(DISTINCT CASE WHEN m.stop_reason = 'length'  THEN m.session_id END) AS max_tokens_sessions,
+        COUNT(DISTINCT CASE WHEN m.stop_reason = 'aborted' THEN m.session_id END) AS interrupted_sessions,
         MAX(CASE
-          WHEN s.error_count > 0 THEN 2
-          WHEN EXISTS(SELECT 1 FROM messages m
-            WHERE m.session_id = s.id AND m.stop_reason IN ('max_tokens','interrupted')
-          ) THEN 1
+          WHEN m.has_error = 1 THEN 2
+          WHEN m.stop_reason IN ('length', 'aborted') THEN 1
           ELSE 0
-        END)                                                   AS worst_health
-      FROM sessions s
-      LEFT JOIN (
-        SELECT session_id, COUNT(*) AS msg_count
-        FROM messages WHERE role = 'assistant'
-        GROUP BY session_id
-      ) mc ON mc.session_id = s.id
-      WHERE s.agent_name = ? AND s.started_at >= ?
+        END)                                                            AS worst_health
+      FROM messages m
+      JOIN sessions s ON s.id = m.session_id
+      WHERE s.agent_name = ?
+        AND m.timestamp >= ?
+        AND m.role = 'assistant'
+        AND m.model NOT IN ('delivery-mirror', 'gateway-injected')
       GROUP BY day
       ORDER BY day ASC
     `).all(agentName, from) as DayRow[];

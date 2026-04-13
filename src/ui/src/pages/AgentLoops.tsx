@@ -140,35 +140,42 @@ const SECTION_TITLE: React.CSSProperties = {
 export default function AgentLoops() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { data, error } = useFetch<DeepTurnsData>('/api/profiler/loops');
 
   const [agent, setAgent] = useState('all');
   const [timeRange, setTimeRange] = useState('all');
   const [sortBy, setSortBy] = useState<'depth' | 'unique_ratio' | 'cost'>('depth');
 
+  // Backend accepts ?agent= and ?from= so filtering happens in SQL. Previously the
+  // frontend re-filtered a truncated top-100 list, which produced wrong totals when
+  // the real dataset was larger than 100 loopy turns.
+  const fromTs = timeRangeFrom(timeRange);
+  const qs = new URLSearchParams();
+  if (agent !== 'all') qs.set('agent', agent);
+  if (fromTs > 0)      qs.set('from', String(fromTs));
+  const loopsUrl = `/api/profiler/loops${qs.toString() ? '?' + qs.toString() : ''}`;
+  const { data, error } = useFetch<DeepTurnsData>(loopsUrl, [agent, timeRange]);
+
+  // Agent dropdown list must NOT shrink when the user picks an agent. Fetch the
+  // full agent roster from /api/stats, which always returns every known agent.
+  const { data: statsData } = useFetch<{ agents: string[] }>('/api/stats');
   const agentOptions = useMemo(() => {
-    if (!data) return [{ label: t('deepTurns.allAgents'), value: 'all' }];
-    const names = [...new Set(data.turns.map(dt => dt.agent_name))].sort();
+    const names = statsData?.agents ?? [];
     return [
       { label: t('deepTurns.allAgents'), value: 'all' },
       ...names.map(n => ({ label: n, value: n })),
     ];
-  }, [data, t]);
+  }, [statsData, t]);
 
   if (error && !data) return <div style={{ padding: 'var(--space-5)' }}><AlertBanner variant="error">{error}</AlertBanner></div>;
   if (!data) return <Loading />;
 
-  const { turns: allTurns, thresholds } = data;
+  const { turns: allTurns, thresholds, summary: backendSummary } = data;
 
-  // Apply filters
-  const fromTs = timeRangeFrom(timeRange);
-  const filtered = allTurns.filter(dt => {
-    if (agent !== 'all' && dt.agent_name !== agent) return false;
-    if (fromTs > 0 && dt.started_at < fromTs) return false;
-    return true;
-  });
+  // The backend already filtered by agent/time, so `allTurns` is the authoritative
+  // filtered set (top 100 by depth). No further filtering here.
+  const filtered = allTurns;
 
-  // Apply sort
+  // Apply sort (display-only; doesn't affect counts)
   const sorted = [...filtered].sort((a, b) =>
     sortBy === 'depth'
       ? b.loop_depth - a.loop_depth
@@ -177,17 +184,19 @@ export default function AgentLoops() {
         : a.unique_ratio - b.unique_ratio
   );
 
-  // Filtered summary
+  // Use the backend's full-set summary directly. It reflects the real total across
+  // ALL loopy turns matching the filter (not just the top 100 returned in `turns`).
   const fSummary = {
-    total: filtered.length,
-    error_count: filtered.filter(dt => dt.loop_depth >= thresholds.error).length,
-    max_depth: filtered.length ? Math.max(...filtered.map(dt => dt.loop_depth)) : 0,
-    total_cost: filtered.reduce((s, dt) => s + dt.cost, 0),
-    avg_unique_ratio: filtered.length
-      ? filtered.reduce((s, dt) => s + dt.unique_ratio, 0) / filtered.length
-      : 1,
+    total:            backendSummary.total,
+    error_count:      backendSummary.error_count,
+    max_depth:        backendSummary.max_depth,
+    total_cost:       backendSummary.total_cost,
+    avg_unique_ratio: backendSummary.avg_unique_ratio,
   };
 
+  // Depth histogram: ideally computed from the full set, but the backend only returns
+  // counts aggregated over all loop types. The top-100 sample is representative for the
+  // shape of the distribution; label the chart as "top 100" when truncation is active.
   const depthBuckets = [
     { label: `${thresholds.warn}–${thresholds.error - 1}`, min: thresholds.warn,  max: thresholds.error - 1, color: '#3B82F6' },
     { label: `${thresholds.error}–29`,                     min: thresholds.error, max: 29,                   color: '#F59E0B' },

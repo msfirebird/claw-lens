@@ -5,7 +5,6 @@ import * as fs from 'fs';
 import { findSessionFiles, parseSessionFile } from './parser';
 import { ingestAuditEvents } from './audit/audit-parser';
 import { rebuildAllBaselines } from './audit/baseline';
-import { calculateDailyRiskScore } from './audit/risk-scorer';
 
 export function getDbPath(): string {
   const clawHome = process.env.OPENCLAW_HOME || path.join(os.homedir(), '.openclaw');
@@ -127,17 +126,6 @@ export function initSchema(db: Database.Database): void {
       FOREIGN KEY (audit_event_id) REFERENCES audit_events(id)
     );
 
-    CREATE TABLE IF NOT EXISTS agent_risk_scores (
-      agent_id TEXT NOT NULL,
-      date TEXT NOT NULL,
-      risk_score INTEGER NOT NULL,
-      sensitive_path_count INTEGER DEFAULT 0,
-      external_call_count INTEGER DEFAULT 0,
-      sensitive_finding_count INTEGER DEFAULT 0,
-      anomaly_count INTEGER DEFAULT 0,
-      PRIMARY KEY (agent_id, date)
-    );
-
     CREATE TABLE IF NOT EXISTS agent_baselines (
       agent_id TEXT PRIMARY KEY,
       computed_at INTEGER,
@@ -174,6 +162,8 @@ export function initSchema(db: Database.Database): void {
   try { db.exec(`DROP TABLE IF EXISTS custom_sensitive_patterns`); } catch { /* ignore */ }
   // Drop annotations table (removed feature)
   try { db.exec(`DROP TABLE IF EXISTS annotations`); } catch { /* ignore */ }
+  // Drop agent_risk_scores table (removed feature — daily weighted score was never rendered in UI)
+  try { db.exec(`DROP TABLE IF EXISTS agent_risk_scores`); } catch { /* ignore */ }
 
   // Migration v6: fix context redaction — mask ALL sensitive values in context snippets
   try {
@@ -183,8 +173,21 @@ export function initSchema(db: Database.Database): void {
       db.exec(`DELETE FROM audit_events`);
       db.exec(`DELETE FROM ingest_state`);
       db.exec(`DELETE FROM audit_ingest_state`);
-      db.exec(`DELETE FROM agent_risk_scores`);
       db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('audit_scoring_version', '18')").run();
+    }
+  } catch { /* ignore */ }
+
+  // Migration v3: parser changes that require full re-ingest:
+  //   v2: total_messages now assistant-only non-synthetic
+  //   v3: tool_calls.success now derived from details.status (not the unreliable
+  //       isError field which was almost always false), and duration_ms fallback
+  //       uses dispatch time instead of LLM-call-start (was overestimating by ~100x).
+  // Clearing ingest_state forces re-parse of every JSONL on next ingest.
+  try {
+    const v = db.prepare("SELECT value FROM settings WHERE key = 'session_aggregate_version'").get() as { value: string } | undefined;
+    if (!v || v.value !== '3') {
+      db.exec(`DELETE FROM ingest_state`);
+      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('session_aggregate_version', '3')").run();
     }
   } catch { /* ignore */ }
 
@@ -320,34 +323,12 @@ export async function ingestAll(db: Database.Database, opts: IngestOptions = {})
     }
   }
 
-  // Rebuild baselines and daily risk scores after ingestion
+  // Rebuild baselines after ingestion (used by anomaly detection)
   if (result.filesProcessed > 0) {
     try {
       rebuildAllBaselines(db);
-      // Recalculate risk scores for every (agent, date) present in audit_events
-      const upsertScore = db.prepare(`
-        INSERT INTO agent_risk_scores (agent_id, date, risk_score, sensitive_path_count, external_call_count, sensitive_finding_count, anomaly_count)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(agent_id, date) DO UPDATE SET
-          risk_score = excluded.risk_score,
-          sensitive_path_count = excluded.sensitive_path_count,
-          external_call_count = excluded.external_call_count,
-          sensitive_finding_count = excluded.sensitive_finding_count,
-          anomaly_count = excluded.anomaly_count
-      `);
-      const agentDates = db.prepare(`
-        SELECT DISTINCT agent_id, date(timestamp/1000, 'unixepoch', 'localtime') as date
-        FROM audit_events ORDER BY agent_id, date
-      `).all() as { agent_id: string; date: string }[];
-      const scoreRun = db.transaction(() => {
-        for (const { agent_id, date } of agentDates) {
-          const r = calculateDailyRiskScore(db, agent_id, date);
-          upsertScore.run(agent_id, date, r.score, r.sensitivePathCount, r.externalCallCount, r.sensitiveFindingCount, r.anomalyCount);
-        }
-      });
-      scoreRun();
     } catch (e) {
-      result.errors.push(`baseline/risk rebuild failed: ${String(e)}`);
+      result.errors.push(`baseline rebuild failed: ${String(e)}`);
     }
   }
 
@@ -404,7 +385,7 @@ function ingestSession(
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id, message_id) DO UPDATE SET
       arguments = excluded.arguments,
-      duration_ms = COALESCE(excluded.duration_ms, tool_calls.duration_ms),
+      duration_ms = excluded.duration_ms,
       success = excluded.success
   `);
 

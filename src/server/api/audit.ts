@@ -70,8 +70,8 @@ export function auditRouter(db: Database.Database): Router {
     else { conditions.push('risk_score > 0'); }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const lim = Math.min(Number(limit) || 50, 500);
-    const off = Number(offset) || 0;
+    const lim = Math.min(Math.max(1, Number(limit) || 50), 500);
+    const off = Math.max(0, Number(offset) || 0);
 
     const total = (db.prepare(`SELECT COUNT(*) as cnt FROM audit_events ${where}`).get(...params) as { cnt: number }).cnt;
     const events = db.prepare(`
@@ -124,8 +124,8 @@ export function auditRouter(db: Database.Database): Router {
     if (!eventId && dismissed !== 'true') { conditions.push('dismissed = 0'); }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const lim = Math.min(Number(limit) || 50, 500);
-    const off = Number(offset) || 0;
+    const lim = Math.min(Math.max(1, Number(limit) || 50), 500);
+    const off = Math.max(0, Number(offset) || 0);
 
     const total = (db.prepare(`SELECT COUNT(*) as cnt FROM sensitive_findings ${where}`).get(...params) as { cnt: number }).cnt;
     const findings = db.prepare(`
@@ -218,11 +218,6 @@ export function auditRouter(db: Database.Database): Router {
       "SELECT COUNT(*) as cnt FROM sensitive_findings WHERE pattern_type IN ('instruction_override','new_instructions','role_hijack','exfil_request','exfil_url','base64_payload','delimiter_escape','xml_injection','dan_jailbreak') AND dismissed = 0"
     ).get() as { cnt: number }).cnt;
 
-    const topRiskyAgents = db.prepare(`
-      SELECT agent_id, MAX(risk_score) as score FROM agent_risk_scores
-      GROUP BY agent_id ORDER BY score DESC LIMIT 5
-    `).all();
-
     // Agent trust labels + verdicts
     const agents = db.prepare('SELECT DISTINCT agent_id FROM audit_events').all() as { agent_id: string }[];
     const agentTrust: Record<string, string> = {};
@@ -232,7 +227,7 @@ export function auditRouter(db: Database.Database): Router {
       agentVerdicts[agent_id] = agentVerdict(db, agent_id);
     }
 
-    res.json({ totalEvents, highRiskEvents, mediumRiskEvents, lowRiskEvents, sensitiveDataEvents, dangerousCmdEvents, activeFindings, dismissedFindings, injectionCount, topRiskyAgents, agentTrust, agentVerdicts });
+    res.json({ totalEvents, highRiskEvents, mediumRiskEvents, lowRiskEvents, sensitiveDataEvents, dangerousCmdEvents, activeFindings, dismissedFindings, injectionCount, agentTrust, agentVerdicts });
   });
 
   // GET /api/audit/agents — list distinct agents with audit data

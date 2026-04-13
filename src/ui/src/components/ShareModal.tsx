@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { X, Download, Copy, Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+const COPIED_FEEDBACK_MS = 2_000;
+
 interface Props {
   dataUrl: string;
   onClose: () => void;
@@ -16,7 +18,7 @@ export function ShareModal({ dataUrl, onClose }: Props) {
       const blob = await (await fetch(dataUrl)).blob();
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setCopied(false), COPIED_FEEDBACK_MS);
     } catch (err) {
       console.error('Copy failed:', err);
     }

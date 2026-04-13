@@ -520,7 +520,6 @@ export default function Audit() {
     injectionCount: number;
     activeFindings: number;
     dismissedFindings: number;
-    topRiskyAgents: { agent_id: string; score: number }[];
     agentTrust: Record<string, string>;
     agentVerdicts: Record<string, string>;
   }>('/api/audit/summary');

@@ -329,7 +329,7 @@ function PipelineFlow({ run }: { run: ReplayRun }) {
 function CopyButton({ text }: { text: string }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
-  function handleCopy() {
+  function copyTraceToClipboard() {
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -337,7 +337,7 @@ function CopyButton({ text }: { text: string }) {
   }
   return (
     <button
-      onClick={handleCopy}
+      onClick={copyTraceToClipboard}
       style={{
         background: copied ? 'rgba(16,185,129,0.15)' : 'var(--surface3)',
         border: '1px solid var(--border)',
@@ -852,7 +852,7 @@ export default function DebugReplay() {
   const replayUrl = selectedSession ? `/api/debug/session/${selectedSession}/cache-replay` : '';
   const { data: replayData, loading } = useFetch<ReplayData>(replayUrl, [selectedSession]);
 
-  function handleSessionChange(id: string) {
+  function selectDebugSession(id: string) {
     setSelectedSession(id);
     setShowAll(false);
   }
@@ -947,7 +947,7 @@ export default function DebugReplay() {
             <label style={{ fontSize: 13, color: 'var(--muted)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.08em' }}>
               {t('debugReplay.session')}
             </label>
-            <SessionPicker sessions={sessions} value={selectedSession} onChange={handleSessionChange} />
+            <SessionPicker sessions={sessions} value={selectedSession} onChange={selectDebugSession} />
           </div>
         )}
       </div>

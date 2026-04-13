@@ -287,7 +287,7 @@ function JobRow({ job, onToggle }: { job: CronJob; onToggle: (id: string, enable
   const human = cronToHuman(job.schedule.expr, t);
   const tz = job.schedule.tz || '';
 
-  async function handleToggle(e: React.MouseEvent) {
+  async function toggleRunEnabled(e: React.MouseEvent) {
     e.stopPropagation();
     if (toggling) return;
     setToggling(true);
@@ -402,7 +402,7 @@ function JobRow({ job, onToggle }: { job: CronJob; onToggle: (id: string, enable
         {/* Toggle */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
           <div
-            onClick={handleToggle}
+            onClick={toggleRunEnabled}
             title={job.enabled ? t('cron.clickToDisable') : t('cron.clickToEnable')}
             style={{
               width: 40, height: 22,
@@ -566,7 +566,7 @@ export default function Cron() {
   // Sync localJobs when rawJobs first arrives
   if (rawJobs && !localJobs) setLocalJobs(Array.isArray(rawJobs) ? rawJobs : []);
 
-  function handleToggle(id: string, enabled: boolean) {
+  function toggleJobEnabled(id: string, enabled: boolean) {
     setLocalJobs(prev => (prev ?? []).map(j => j.id === id ? { ...j, enabled } : j));
   }
 
@@ -651,7 +651,7 @@ export default function Cron() {
           </div>
 
           {jobs.map(job => (
-            <JobRow key={job.id} job={job} onToggle={handleToggle} />
+            <JobRow key={job.id} job={job} onToggle={toggleJobEnabled} />
           ))}
         </>
       )}

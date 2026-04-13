@@ -9,7 +9,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
  *   1. Agent paused waiting for tool approval (writes stop → chime)
  *   2. Agent finished its task (writes stop → chime)
  */
-export const IDLE_THRESHOLD_MS = 8_000;
+const IDLE_THRESHOLD_MS = 8_000;
 const MIN_CHIME_INTERVAL_MS = 4_000;
 
 export function useHumanInLoopNotifier() {
@@ -134,7 +134,7 @@ export function useFetch<T>(url: string, deps: unknown[] = []) {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
-      .then(d => { if (!cancelled) { setData(d); setLoading(false); } })
+      .then(d => { if (!cancelled) { setData(d); setError(null); setLoading(false); } })
       .catch(e => { if (!cancelled) { setError(String(e)); setLoading(false); } });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -150,11 +150,17 @@ export function useFetch<T>(url: string, deps: unknown[] = []) {
   return { data, loading, error, refresh };
 }
 
-/** For KPI display: $3.93, $0.0004 */
+/** Precise 4dp for per-message / per-turn detail */
 export function fmtCost(n: number | null | undefined): string {
   if (n == null) return '—';
+  if (n === 0) return '$0.0000';
+  return `$${n.toFixed(4)}`;
+}
+
+/** Compact 2dp for KPI cards & summaries */
+export function fmtCostKpi(n: number | null | undefined): string {
+  if (n == null) return '—';
   if (n === 0) return '$0.00';
-  if (n < 0.005) return `$${n.toFixed(5)}`;
   if (n < 0.01) return `$${n.toFixed(4)}`;
   return `$${n.toFixed(2)}`;
 }
@@ -180,37 +186,13 @@ export function fmtMs(n: number | null | undefined): string {
   return `${Math.round(n)}ms`;
 }
 
-export function fmtDate(ts: number | null | undefined): string {
-  if (!ts) return '—';
-  return new Date(ts).toLocaleString();
-}
 
-export function fmtDateShort(ts: number): string {
-  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
 
 export function fmtDatetime(ts: number): string {
   return new Date(ts).toLocaleString(undefined, {
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit',
   });
-}
-
-/** Model name → badge class */
-export function modelBadgeClass(model: string): string {
-  const m = model.toLowerCase();
-  if (m.includes('opus'))   return 'b1';
-  if (m.includes('sonnet')) return 'b2';
-  if (m.includes('haiku'))  return 'b3';
-  if (m.includes('gpt-4') || m.includes('o1') || m.includes('o3')) return 'b4';
-  if (m.includes('gpt-3') || m.includes('mini')) return 'b5';
-  return 'b1';
-}
-
-/** Assign a data color index 0-6 to a model name deterministically */
-export function modelColorIndex(model: string, allModels: string[]): number {
-  const idx = allModels.indexOf(model);
-  return idx >= 0 ? idx % COLORS.length : 0;
 }
 
 /* ── Shared types ── */
@@ -259,13 +241,6 @@ export function fmtTs(input: number | string, opts?: { seconds?: boolean }): str
 
 /* ── Shared styles ── */
 
-export const TOOLTIP_CONTENT_STYLE: React.CSSProperties = {
-  background: 'var(--surface)',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-sm)',
-  fontSize: 11,
-  color: 'var(--text)',
-};
 
 export const tipBadge: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',

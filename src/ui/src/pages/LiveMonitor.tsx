@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { PageHeader, EmptyState } from '../components/ui';
-import { useFetch } from '../hooks';
+import { PageHeader, EmptyState, Loading } from '../components/ui';
+import { useFetch, fmtMs } from '../hooks';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -12,7 +12,6 @@ type SessionStatus = 'running' | 'stuck' | 'idle';
 interface LiveSession {
   session_id: string;
   agent_name: string;
-  file_mtime_ms: number;
   idle_ms: number;
   status: SessionStatus;
   last_tool: string | null;
@@ -57,12 +56,7 @@ function fmtIdle(ms: number, t: TFunction): string {
   return m === 0 ? t('common.hoursAgo', { n: hStr }) : t('common.hhmmAgo', { h, m });
 }
 
-function fmtDuration(ms: number | null): string {
-  if (ms == null) return '';
-  if (ms >= 60000) return `${(ms / 60000).toFixed(1)}m`;
-  if (ms >= 1000)  return `${(ms / 1000).toFixed(1)}s`;
-  return `${ms}ms`;
-}
+const TRACE_TICK_MS = 1_000;
 
 // ── ThinkingBlock ─────────────────────────────────────────────────────────────
 
@@ -112,14 +106,14 @@ function SessionLiveTrace({ sessionId, isStuck }: { sessionId: string; isStuck: 
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 1000);
+    const id = setInterval(() => setTick(t => t + 1), TRACE_TICK_MS);
     return () => clearInterval(id);
   }, []);
 
   const { data, error } = useFetch<TraceData>(`/api/sessions/${sessionId}/trace`, [sessionId, tick]);
 
   if (error && !data) return null;
-  if (!data) return <div style={{ padding: '12px 16px', fontSize: 12, color: 'var(--faint)' }}>{t('live.loading')}</div>;
+  if (!data) return <Loading />;
 
   const accentColor = isStuck ? 'var(--C-amber)' : 'var(--C-green)';
   const totalTools  = data.turns.reduce((sum, t) => sum + t.tools.length, 0);
@@ -200,7 +194,7 @@ function SessionLiveTrace({ sessionId, isStuck }: { sessionId: string; isStuck: 
                 )}
                 {tc.duration_ms != null && (
                   <span style={{ fontFamily: 'var(--font-m)', fontSize: 11, color: 'var(--faint)', flexShrink: 0 }}>
-                    {fmtDuration(tc.duration_ms)}
+                    {fmtMs(tc.duration_ms)}
                   </span>
                 )}
               </div>
@@ -249,11 +243,13 @@ export default function LiveMonitor() {
   useEffect(() => {
     let disposed = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let activeWs: WebSocket | null = null;
 
     function connect() {
       if (disposed) return;
       const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
       const ws = new WebSocket(`${proto}://${window.location.host}/ws/live`);
+      activeWs = ws;
       ws.onopen  = () => { if (!disposed) setWsConnected(true); };
       ws.onmessage = (e) => {
         try {
@@ -272,12 +268,13 @@ export default function LiveMonitor() {
     return () => {
       disposed = true;
       if (retryTimer) clearTimeout(retryTimer);
+      if (activeWs) { activeWs.onclose = null; activeWs.close(); }
       clearInterval(pollId);
     };
   }, []);
 
-  const { data, error: fetchError } = useFetch<LiveSessionsData>('/api/stats/live-sessions', [tick]);
-  const connected = wsConnected && !fetchError;
+  const { data } = useFetch<LiveSessionsData>('/api/stats/live-sessions', [tick]);
+  const connected = wsConnected;
   const sessions = data?.sessions ?? [];
 
   return (
@@ -358,9 +355,6 @@ export default function LiveMonitor() {
                   }} />
                   <span style={{ fontFamily: 'var(--font-b)', fontWeight: 700, fontSize: 14, color: isIdle ? 'var(--muted)' : 'var(--text)' }}>
                     {session.agent_name}
-                  </span>
-                  <span style={{ fontFamily: 'var(--font-m)', fontSize: 11, color: 'var(--faint)' }}>
-                    {session.session_id.slice(0, 8)}
                   </span>
                   <span style={{
                     fontSize: 10, fontWeight: 600, letterSpacing: '.06em', textTransform: 'uppercase',

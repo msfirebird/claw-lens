@@ -733,7 +733,7 @@ export default function Agents() {
     });
   }, [data?.agents]);
 
-  function handleSelectAgent(agent: Agent) {
+  function selectAgent(agent: Agent) {
     setSelectedAgent(prev => prev?.agent_name === agent.agent_name ? null : agent);
   }
 
@@ -811,7 +811,7 @@ export default function Agents() {
                 <AgentCard
                   agent={agent}
                   isSelected={selectedAgent?.agent_name === agent.agent_name}
-                  onSelect={handleSelectAgent}
+                  onSelect={selectAgent}
                 />
                 {selectedAgent?.agent_name === agent.agent_name && (
                   <div style={{ gridColumn: '1 / -1' }}>

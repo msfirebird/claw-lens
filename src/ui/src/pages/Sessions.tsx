@@ -7,6 +7,9 @@ import {
   PageHeader, KpiStrip, Kpi, Loading, TabBar, AlertBanner,
 } from '../components/ui';
 
+const ACTIVE_SESSION_THRESHOLD_MS = 10 * 60 * 1_000;
+const COPIED_FEEDBACK_MS = 1_500;
+
 interface Session {
   id: string; agent_name: string;
   started_at: number; ended_at: number;
@@ -27,16 +30,6 @@ interface SessionDetail {
   session: Session;
   modelBreakdown: { model: string; message_count: number; total_tokens: number; cost_total: number; input_tokens: number; output_tokens: number; cache_read: number; cache_write: number }[];
   toolBreakdown: { tool_name: string; call_count: number; avg_duration_ms: number }[];
-}
-
-interface ContextHealthEntry {
-  id: string;
-  contextUsed: number;
-  contextLimit: number;
-  utilizationPct: number;
-  burnRate: number;
-  burnRateTokensPerMin: number;
-  status: 'ok' | 'warning' | 'critical';
 }
 
 interface Message {
@@ -67,11 +60,6 @@ function cacheHitRate(cacheRead: number, inputTokens: number): number {
   return cacheRead / total;
 }
 
-// ── Table styles ──
-const tableStyle = TABLE_STYLE;
-const thStyle = TH_STYLE;
-const tdStyle = TD_STYLE;
-const monoStyle = MONO_STYLE;
 
 export default function Sessions() {
   const { t } = useTranslation();
@@ -88,19 +76,6 @@ export default function Sessions() {
   const [detailTab, setDetailTab] = useState<'overview' | 'messages'>('overview');
   const [expandedMsgs, setExpandedMsgs] = useState<Set<string>>(new Set());
   const [msgContents, setMsgContents] = useState<Record<string, unknown[]>>({});
-
-  // ── Context Health ──
-  const [contextHealthMap, setContextHealthMap] = useState<Record<string, ContextHealthEntry>>({});
-  useEffect(() => {
-    fetch('/api/sessions/context-health')
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then((d: { sessions: ContextHealthEntry[] }) => {
-        const map: Record<string, ContextHealthEntry> = {};
-        (d.sessions || []).forEach(s => { map[s.id] = s; });
-        setContextHealthMap(map);
-      })
-      .catch(() => {});
-  }, []);
 
   // Sync agent filter from URL query param
   useEffect(() => {
@@ -183,10 +158,13 @@ export default function Sessions() {
     const d30 = now - 30 * 86400000;
     const allSessions = sessions || [];
     const totalSessions = allSessions.length;
-    const activeNow = allSessions.filter(s => s.last_message_at && (now - s.last_message_at) < 10 * 60 * 1000).length; // active in last 10 min
-    const errorsToday = allSessions.filter(s => s.error_count > 0 && s.started_at >= todayMidnight.getTime()).length;
-    const errors7d = allSessions.filter(s => s.error_count > 0 && s.started_at >= d7).length;
-    const errors30d = allSessions.filter(s => s.error_count > 0 && s.started_at >= d30).length;
+    const activeNow = allSessions.filter(s => s.last_message_at && (now - s.last_message_at) < ACTIVE_SESSION_THRESHOLD_MS).length; // active in last 10 min
+    // Time windows bucket by last activity, not session start, so a cross-midnight
+    // session correctly counts as "today". Matches the backend in /api/stats/agents.
+    const activeTs = (s: Session) => s.last_message_at ?? s.started_at;
+    const errorsToday = allSessions.filter(s => s.error_count > 0 && activeTs(s) >= todayMidnight.getTime()).length;
+    const errors7d = allSessions.filter(s => s.error_count > 0 && activeTs(s) >= d7).length;
+    const errors30d = allSessions.filter(s => s.error_count > 0 && activeTs(s) >= d30).length;
     return { totalSessions, activeNow, errorsToday, errors7d, errors30d };
   }, [sessions]);
 
@@ -231,7 +209,7 @@ export default function Sessions() {
     return { totalCacheRead, totalCacheWrite, totalInput, rate, barTotal };
   }, [detail]);
 
-  function handleSelectSession(id: string) {
+  function toggleSessionDetail(id: string) {
     if (id === selected) {
       setSelected(null);
       setSearchParams(p => { p.delete('q'); return p; }, { replace: true });
@@ -324,17 +302,16 @@ export default function Sessions() {
           ) : loading ? (
             <Loading />
           ) : (
-            <table style={tableStyle}>
+            <table style={TABLE_STYLE}>
               <thead>
                 <tr>
-                  <th style={thStyle}>{t('common.session')}</th>
-                  <th style={{ ...thStyle, width: 28 }} title={t('sessions.contextHealthTitle')}>●</th>
-                  <th style={thStyle}>{t('common.agent')}</th>
-                  <th style={thStyle}>{t('sessions.liveStatus')}</th>
-                  <th style={thStyle}>{t('common.model')}</th>
-                  <th style={thStyle}>{t('common.tokens')}</th>
-                  <th style={thStyle}>{t('common.cost')}</th>
-                  <th style={{ ...thStyle, position: 'relative' }}>
+                  <th style={TH_STYLE}>{t('common.session')}</th>
+                  <th style={TH_STYLE}>{t('common.agent')}</th>
+                  <th style={TH_STYLE}>{t('sessions.liveStatus')}</th>
+                  <th style={TH_STYLE}>{t('common.model')}</th>
+                  <th style={TH_STYLE}>{t('common.tokens')}</th>
+                  <th style={TH_STYLE}>{t('common.cost')}</th>
+                  <th style={{ ...TH_STYLE, position: 'relative' }}>
                     <span className="sess-tip-cache" style={{ cursor: 'help' }}>
                       {t('sessions.cacheHit')}
                       <span style={tipBadge}>?</span>
@@ -347,7 +324,7 @@ export default function Sessions() {
                     </span>
                     <style>{`.sess-tip-cache:hover .sess-tip-cache-box { display: block !important; }`}</style>
                   </th>
-                  <th style={{ ...thStyle, position: 'relative' }}>
+                  <th style={{ ...TH_STYLE, position: 'relative' }}>
                     <span className="sess-tip-ctx" style={{ cursor: 'help' }}>
                       {t('sessions.contextPressure')}
                       <span style={tipBadge}>?</span>
@@ -360,7 +337,7 @@ export default function Sessions() {
                     </span>
                     <style>{`.sess-tip-ctx:hover .sess-tip-ctx-box { display: block !important; }`}</style>
                   </th>
-                  <th style={{ ...thStyle, position: 'relative', width: 52 }}>
+                  <th style={{ ...TH_STYLE, position: 'relative', width: 52 }}>
                     <span className="sess-tip-burn" style={{ cursor: 'help' }}>
                       {t('sessions.burnRate')}
                       <span style={tipBadge}>?</span>
@@ -374,7 +351,7 @@ export default function Sessions() {
                     </span>
                     <style>{`.sess-tip-burn:hover .sess-tip-burn-box { display: block !important; }`}</style>
                   </th>
-                  <th style={{ ...thStyle, position: 'relative' }}>
+                  <th style={{ ...TH_STYLE, position: 'relative' }}>
                     <span className="sess-tip-status" style={{ cursor: 'help' }}>
                       {t('sessions.lastSignal')}
                       <span style={tipBadge}>?</span>
@@ -389,9 +366,9 @@ export default function Sessions() {
                     </span>
                     <style>{`.sess-tip-status:hover .sess-tip-status-box { display: block !important; }`}</style>
                   </th>
-                  <th style={thStyle}>{t('common.errors')}</th>
-                  <th style={thStyle}>{t('common.duration')}</th>
-                  <th style={{ ...thStyle, position: 'relative' }}>
+                  <th style={TH_STYLE}>{t('common.errors')}</th>
+                  <th style={TH_STYLE}>{t('common.duration')}</th>
+                  <th style={{ ...TH_STYLE, position: 'relative' }}>
                     <span className="sess-tip-avg" style={{ cursor: 'help' }}>
                       {t('sessions.avgPerMsg')}
                       <span style={tipBadge}>?</span>
@@ -401,8 +378,8 @@ export default function Sessions() {
                     </span>
                     <style>{`.sess-tip-avg:hover .sess-tip-avg-box { display: block !important; }`}</style>
                   </th>
-                  <th style={thStyle}>{t('sessions.lastActive')}</th>
-                  <th style={thStyle}>{t('sessions.started')}</th>
+                  <th style={TH_STYLE}>{t('sessions.lastActive')}</th>
+                  <th style={TH_STYLE}>{t('sessions.started')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -423,31 +400,18 @@ export default function Sessions() {
                     <React.Fragment key={s.id}>
                     <tr
                       ref={isSelected ? selectedRowRef : null}
-                      onClick={() => handleSelectSession(s.id)}
+                      onClick={() => toggleSessionDetail(s.id)}
                       style={{
                         cursor: 'pointer',
                         background: isSelected ? 'var(--surface2)' : undefined,
                         borderLeft: isSelected ? '3px solid var(--C-blue)' : '3px solid transparent',
                       }}
                     >
-                      <td style={tdStyle}>
-                        <span style={{ ...monoStyle, color: '#60a5fa', cursor: 'pointer' }}>{s.id.slice(0, 12)}…</span>
+                      <td style={TD_STYLE}>
+                        <span style={{ ...MONO_STYLE, color: '#60a5fa', cursor: 'pointer' }}>{s.id.slice(0, 12)}…</span>
                       </td>
-                      <td style={{ ...tdStyle, width: 28 }}>
-                        {(() => {
-                          const ch = contextHealthMap[s.id];
-                          if (!ch) return <span style={{ color: 'var(--muted)' }}>—</span>;
-                          const dotColor = ch.status === 'ok' ? '#22c55e' : ch.status === 'warning' ? '#eab308' : '#ef4444';
-                          const glow = ch.status === 'critical' ? `0 0 6px 2px rgba(239,68,68,0.6)` : 'none';
-                          return (
-                            <span title={`Context: ${fmtPct(ch.utilizationPct / 100, 1)} used`}>
-                              <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: dotColor, boxShadow: glow }} />
-                            </span>
-                          );
-                        })()}
-                      </td>
-                      <td style={tdStyle}>{s.agent_name}</td>
-                      <td style={tdStyle}>
+                      <td style={TD_STYLE}>{s.agent_name}</td>
+                      <td style={TD_STYLE}>
                         {(() => {
                           const IDLE_THRESHOLD = 30 * 60 * 1000;
                           const lastTs = s.last_message_at || s.started_at;
@@ -464,11 +428,11 @@ export default function Sessions() {
                           );
                         })()}
                       </td>
-                      <td style={tdStyle}><span style={monoStyle}>{s.primary_model}</span></td>
-                      <td style={tdStyle}><strong>{fmtTokens(s.total_tokens)}</strong></td>
-                      <td style={tdStyle}>{fmtCost(s.total_cost)}</td>
-                      <td style={tdStyle}><span style={{ color: hitClr }}>{hitPct}</span></td>
-                      <td style={tdStyle}>
+                      <td style={TD_STYLE}><span style={MONO_STYLE}>{s.primary_model}</span></td>
+                      <td style={TD_STYLE}><strong>{fmtTokens(s.total_tokens)}</strong></td>
+                      <td style={TD_STYLE}>{fmtCost(s.total_cost)}</td>
+                      <td style={TD_STYLE}><span style={{ color: hitClr }}>{hitPct}</span></td>
+                      <td style={TD_STYLE}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 9, fontWeight: 500, background: pBg, color: pColor, whiteSpace: 'nowrap', flexShrink: 0 }}>{pLabel}</span>
                           <span style={{ color: pColor, fontVariantNumeric: 'tabular-nums' }}>{fmtPct((s.utilizationPct ?? 0) / 100, 1)}</span>
@@ -477,7 +441,7 @@ export default function Sessions() {
                           </div>
                         </div>
                       </td>
-                      <td style={tdStyle}>
+                      <td style={TD_STYLE}>
                         <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 9, fontWeight: 500,
                           background: s.pacing === 'rising' ? 'rgba(239,68,68,0.15)' : s.pacing === 'stable' ? 'rgba(234,179,8,0.15)' : s.pacing === 'cooling' ? 'rgba(34,197,94,0.15)' : 'rgba(100,100,100,0.15)',
                           color: s.pacing === 'rising' ? '#ef4444' : s.pacing === 'stable' ? '#eab308' : s.pacing === 'cooling' ? '#22c55e' : '#888' }}>
@@ -486,28 +450,29 @@ export default function Sessions() {
                       </td>
                       {(() => {
                         const sr = s.last_stop_reason || '';
+                        // pi-ai stop_reason values OpenClaw actually emits:
+                        // 'stop' / 'toolUse' / 'error' / 'aborted' / 'length' (= max_tokens)
                         const statusMap: Record<string, { label: string; color: string; bg: string }> = {
                           'stop': { label: t('sessions.normalSignal'), color: '#888', bg: 'rgba(100,100,100,0.15)' },
-                          'end_turn': { label: t('sessions.normalSignal'), color: '#888', bg: 'rgba(100,100,100,0.15)' },
                           'error': { label: t('sessions.errorSignal'), color: '#ef4444', bg: 'rgba(239,68,68,0.15)' },
                           'aborted': { label: t('sessions.abortedSignal'), color: '#eab308', bg: 'rgba(234,179,8,0.15)' },
-                          'max_tokens': { label: t('sessions.maxTokensSignal'), color: '#f97316', bg: 'rgba(249,115,22,0.15)' },
-                          'tool_use': { label: t('sessions.activeSignal'), color: '#3b82f6', bg: 'rgba(59,130,246,0.15)' },
+                          'length': { label: t('sessions.maxTokensSignal'), color: '#f97316', bg: 'rgba(249,115,22,0.15)' },
+                          'toolUse': { label: t('sessions.activeSignal'), color: '#3b82f6', bg: 'rgba(59,130,246,0.15)' },
                         };
                         const st = statusMap[sr] || { label: sr || '—', color: '#888', bg: 'rgba(100,100,100,0.15)' };
                         return (
-                          <td style={tdStyle}>
+                          <td style={TD_STYLE}>
                             <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 9, fontWeight: 500, background: st.bg, color: st.color }}>{st.label}</span>
                           </td>
                         );
                       })()}
-                      <td style={{ ...tdStyle, color: s.error_count > 0 ? '#ef4444' : 'var(--muted)' }}>
+                      <td style={{ ...TD_STYLE, color: s.error_count > 0 ? '#ef4444' : 'var(--muted)' }}>
                         {s.error_count > 0 ? s.error_count : '—'}
                       </td>
-                      <td style={tdStyle}>{durationStr}</td>
-                      <td style={tdStyle}>{fmtTokens(avgPerMsg)}</td>
-                      <td style={{ ...tdStyle, fontSize: 12, lineHeight: 1.4, color: 'var(--muted)' }}>{lastActiveParts.date}<br/>{lastActiveParts.time}</td>
-                      <td style={{ ...tdStyle, fontSize: 12, lineHeight: 1.4, color: 'var(--muted)' }}>{startedParts.date}<br/>{startedParts.time}</td>
+                      <td style={TD_STYLE}>{durationStr}</td>
+                      <td style={TD_STYLE}>{fmtTokens(avgPerMsg)}</td>
+                      <td style={{ ...TD_STYLE, fontSize: 12, lineHeight: 1.4, color: 'var(--muted)' }}>{lastActiveParts.date}<br/>{lastActiveParts.time}</td>
+                      <td style={{ ...TD_STYLE, fontSize: 12, lineHeight: 1.4, color: 'var(--muted)' }}>{startedParts.date}<br/>{startedParts.time}</td>
                     </tr>
                     {isSelected && detail && (
                       <tr>
@@ -520,7 +485,7 @@ export default function Sessions() {
                                 <span style={{ fontFamily: 'var(--font-m)', fontSize: 12, color: 'var(--text)' }}>{detail.session.id}</span>
                                 <button
                                   title={t('sessions.copySessionIdTitle')}
-                                  onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(detail.session.id); const btn = e.currentTarget; btn.textContent = t('common.copied'); setTimeout(() => { btn.textContent = t('common.copyId'); }, 1500); }}
+                                  onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(detail.session.id); const btn = e.currentTarget; btn.textContent = t('common.copied'); setTimeout(() => { btn.textContent = t('common.copyId'); }, COPIED_FEEDBACK_MS); }}
                                   style={{ background: 'rgba(96,165,250,0.15)', border: '1px solid rgba(96,165,250,0.4)', borderRadius: 4, color: '#60a5fa', cursor: 'pointer', fontSize: 11, padding: '2px 8px', fontFamily: 'var(--font-m)', letterSpacing: '.02em' }}
                                 >{t('common.copyId')}</button>
                                 <button
@@ -698,8 +663,8 @@ export default function Sessions() {
                                 ) : (
                                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                                     <thead><tr>
-                                      <th style={{ ...thStyle, width: 20 }}></th>
-                                      <th style={thStyle}>{t('sessions.msgSeq')}</th><th style={thStyle}>{t('sessions.msgModel')}</th><th style={thStyle}>{t('sessions.msgRole')}</th><th style={thStyle}>{t('sessions.msgIn')}</th><th style={thStyle}>{t('sessions.msgOut')}</th><th style={thStyle}>{t('sessions.msgCacheR')}</th><th style={thStyle}>{t('sessions.msgCacheW')}</th><th style={thStyle}>{t('sessions.msgTotal')}</th><th style={thStyle}>{t('sessions.msgCost')}</th><th style={thStyle}>{t('sessions.msgError')}</th><th style={thStyle}>{t('sessions.msgLatency')}</th>
+                                      <th style={{ ...TH_STYLE, width: 20 }}></th>
+                                      <th style={TH_STYLE}>{t('sessions.msgSeq')}</th><th style={TH_STYLE}>{t('sessions.msgModel')}</th><th style={TH_STYLE}>{t('sessions.msgRole')}</th><th style={TH_STYLE}>{t('sessions.msgIn')}</th><th style={TH_STYLE}>{t('sessions.msgOut')}</th><th style={TH_STYLE}>{t('sessions.msgCacheR')}</th><th style={TH_STYLE}>{t('sessions.msgCacheW')}</th><th style={TH_STYLE}>{t('sessions.msgTotal')}</th><th style={TH_STYLE}>{t('sessions.msgCost')}</th><th style={TH_STYLE}>{t('sessions.msgError')}</th><th style={TH_STYLE}>{t('sessions.msgLatency')}</th>
                                     </tr></thead>
                                     <tbody>
                                       {messages.map(msg => {
@@ -710,18 +675,18 @@ export default function Sessions() {
                                           onClick={e => { e.stopPropagation(); setExpandedMsgs(prev => { const next = new Set(prev); if (next.has(msg.id)) next.delete(msg.id); else { next.add(msg.id); if (!msgContents[msg.id] && selected) { fetch(`/api/sessions/${selected}/messages/${msg.id}/content`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).then(d => { if (d.content) setMsgContents(prev2 => ({ ...prev2, [msg.id]: d.content })); }).catch(() => {}); } } return next; }); }}
                                           style={{ cursor: 'pointer', background: isExp ? 'rgba(59,130,246,0.05)' : undefined }}
                                         >
-                                          <td style={{ ...tdStyle, color: 'var(--muted)', fontSize: 10 }}>{isExp ? '▼' : '▶'}</td>
-                                          <td style={{ ...tdStyle, color: 'var(--faint)' }}>{msg.seq}</td>
-                                          <td style={tdStyle}><span style={monoStyle}>{(msg.model || '').replace('claude-', '').slice(0, 20)}</span></td>
-                                          <td style={{ ...tdStyle, color: 'var(--muted)' }}>{t(`common.role${msg.role === 'user' ? 'User' : msg.role === 'assistant' ? 'Assistant' : 'Other'}`)}</td>
-                                          <td style={tdStyle}>{fmtTokens(msg.input_tokens)}</td>
-                                          <td style={tdStyle}>{fmtTokens(msg.output_tokens)}</td>
-                                          <td style={{ ...tdStyle, color: msg.cache_read > 0 ? 'var(--C-green)' : undefined }}>{fmtTokens(msg.cache_read)}</td>
-                                          <td style={{ ...tdStyle, color: msg.cache_write > 0 ? 'var(--C-purple, #a855f7)' : undefined }}>{fmtTokens(msg.cache_write)}</td>
-                                          <td style={{ ...tdStyle, fontWeight: 500 }}>{fmtTokens(msg.total_tokens)}</td>
-                                          <td style={{ ...tdStyle, color: 'var(--C-blue)' }}>{fmtCost(msg.cost_total)}</td>
-                                          <td style={{ ...tdStyle, color: msg.has_error ? '#ef4444' : 'var(--muted)' }}>{msg.has_error ? t('sessions.msgYes') : '—'}</td>
-                                          <td style={{ ...tdStyle, color: 'var(--faint)' }}>{fmtMs(msg.latency_ms)}</td>
+                                          <td style={{ ...TD_STYLE, color: 'var(--muted)', fontSize: 10 }}>{isExp ? '▼' : '▶'}</td>
+                                          <td style={{ ...TD_STYLE, color: 'var(--faint)' }}>{msg.seq}</td>
+                                          <td style={TD_STYLE}><span style={MONO_STYLE}>{(msg.model || '').replace('claude-', '').slice(0, 20)}</span></td>
+                                          <td style={{ ...TD_STYLE, color: 'var(--muted)' }}>{t(`common.role${msg.role === 'user' ? 'User' : msg.role === 'assistant' ? 'Assistant' : 'Other'}`)}</td>
+                                          <td style={TD_STYLE}>{fmtTokens(msg.input_tokens)}</td>
+                                          <td style={TD_STYLE}>{fmtTokens(msg.output_tokens)}</td>
+                                          <td style={{ ...TD_STYLE, color: msg.cache_read > 0 ? 'var(--C-green)' : undefined }}>{fmtTokens(msg.cache_read)}</td>
+                                          <td style={{ ...TD_STYLE, color: msg.cache_write > 0 ? 'var(--C-purple, #a855f7)' : undefined }}>{fmtTokens(msg.cache_write)}</td>
+                                          <td style={{ ...TD_STYLE, fontWeight: 500 }}>{fmtTokens(msg.total_tokens)}</td>
+                                          <td style={{ ...TD_STYLE, color: 'var(--C-blue)' }}>{fmtCost(msg.cost_total)}</td>
+                                          <td style={{ ...TD_STYLE, color: msg.has_error ? '#ef4444' : 'var(--muted)' }}>{msg.has_error ? t('sessions.msgYes') : '—'}</td>
+                                          <td style={{ ...TD_STYLE, color: 'var(--faint)' }}>{fmtMs(msg.latency_ms)}</td>
                                         </tr>
                                         {isExp && (
                                           <tr>
@@ -747,10 +712,11 @@ export default function Sessions() {
                                                       {t('sessions.stopReason')} <span style={tipBadge}>?</span>
                                                       <span className="msg-stop-tip" style={{ ...tipBox, width: 260 }}>
                                                         {`${t('sessions.stopReasonTooltip')}\n\n`}
-                                                        <span style={{ color: '#22c55e' }}>stop</span> / <span style={{ color: '#22c55e' }}>end_turn</span>{` ${t('sessions.stopReasonFinished')}\n`}
-                                                        <span style={{ color: '#3b82f6' }}>tool_use</span>{` ${t('sessions.stopReasonToolUseDesc')}\n`}
-                                                        <span style={{ color: '#f97316' }}>max_tokens</span>{` ${t('sessions.stopReasonMaxTokensDesc')}\n`}
-                                                        <span style={{ color: '#ef4444' }}>error</span>{` ${t('sessions.stopReasonErrorDesc')}`}
+                                                        <span style={{ color: '#22c55e' }}>stop</span>{` ${t('sessions.stopReasonFinished')}\n`}
+                                                        <span style={{ color: '#3b82f6' }}>toolUse</span>{` ${t('sessions.stopReasonToolUseDesc')}\n`}
+                                                        <span style={{ color: '#f97316' }}>length</span>{` ${t('sessions.stopReasonMaxTokensDesc')}\n`}
+                                                        <span style={{ color: '#ef4444' }}>error</span>{` ${t('sessions.stopReasonErrorDesc')}\n`}
+                                                        <span style={{ color: '#eab308' }}>aborted</span>{` ${t('sessions.abortedSignalDesc', '— cancelled by user')}`}
                                                       </span>
                                                       <style>{`.msg-stop-wrap:hover .msg-stop-tip { display: block !important; }`}</style>
                                                     </span>

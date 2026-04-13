@@ -5,7 +5,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   PieChart, Pie, Cell,
 } from 'recharts';
-import { useFetch, fmtCost, fmtTokens, fmtPct, TABLE_STYLE, TH_STYLE, TD_STYLE, MONO_STYLE } from '../hooks';
+import { useFetch, fmtCost, fmtCostKpi, fmtTokens, fmtPct, TABLE_STYLE, TH_STYLE, TD_STYLE, MONO_STYLE } from '../hooks';
 import {
   PageHeader, SectionLabel, Loading, EmptyState, Card, Dropdown, DateNavigator, AlertBanner, InfoTooltip,
 } from '../components/ui';
@@ -68,12 +68,8 @@ function hitRateColor(rate: number): string {
 
 // ── Styles ──
 
-const tableStyle = TABLE_STYLE;
-const thStyle = TH_STYLE;
 const thRight: React.CSSProperties = { ...TH_STYLE, textAlign: 'right' };
-const tdStyle = TD_STYLE;
 const tdRight: React.CSSProperties = { ...TD_STYLE, textAlign: 'right' };
-const monoStyle = MONO_STYLE;
 
 const tooltipContentStyle: React.CSSProperties = {
   background: '#1a1a1a',
@@ -353,7 +349,7 @@ function TokenTrend() {
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 600, color: '#3b82f6' }}>
                             <span>{t('tokenUsage.cost')}</span>
-                            <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtCost(bucketCost)}</span>
+                            <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtCostKpi(bucketCost)}</span>
                           </div>
                         </div>
                       </div>
@@ -417,7 +413,7 @@ function PeriodRow({ label, data: d, active, onClick }: { label: string; data: T
       <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 'var(--space-2)', fontWeight: active ? 600 : 400 }}>{label}</div>
       {/* Big cost + token total */}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-3)' }}>
-        <div style={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtCost(d.cost)}</div>
+        <div style={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtCostKpi(d.cost)}</div>
         <span style={{ fontSize: 14, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{fmtTokens(d.total)} {t('tokenUsage.tokens')}</span>
       </div>
       {/* Breakdown bar */}
@@ -442,7 +438,7 @@ function PeriodRow({ label, data: d, active, onClick }: { label: string; data: T
       </div>
       <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-2)', fontSize: 12, color: 'var(--muted)', flexWrap: 'wrap' }}>
         <span>{d.sessionCount} {t('tokenUsage.sessions').toLowerCase()}</span>
-        <span>{t('tokenUsage.avgPerSession')}: <span style={{ fontWeight: 500 }}>{fmtCost(d.avgCostPerSession)}</span></span>
+        <span>{t('tokenUsage.avgPerSession')}: <span style={{ fontWeight: 500 }}>{fmtCostKpi(d.avgCostPerSession)}</span></span>
       </div>
     </div>
   );
@@ -595,7 +591,7 @@ export default function TokenUsage() {
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>{d.name}</div>
                   <div>{t('tokenUsage.tokens')}: <strong>{fmtTokens(d.value)}</strong></div>
                   <div>{t('tokenUsage.share')}: <strong>{d.pct}</strong></div>
-                  <div>{t('tokenUsage.cost')}: <strong>{fmtCost(d.cost)}</strong></div>
+                  <div>{t('tokenUsage.cost')}: <strong>{fmtCostKpi(d.cost)}</strong></div>
                 </div>);
               }} />
             </PieChart>
@@ -603,10 +599,10 @@ export default function TokenUsage() {
             );
           })()}
           <Card style={{ padding: 0, overflow: 'hidden' }}>
-            <table style={tableStyle}>
+            <table style={TABLE_STYLE}>
               <thead>
                 <tr>
-                  <th style={thStyle}>{t('tokenUsage.agent')}</th>
+                  <th style={TH_STYLE}>{t('tokenUsage.agent')}</th>
                   <th style={thRight}>{t('tokenUsage.tokens')}</th>
                   <th style={thRight}>{t('tokenUsage.percent')}</th>
                   <th style={thRight}>{t('tokenUsage.cacheHit')}</th>
@@ -617,9 +613,9 @@ export default function TokenUsage() {
               <tbody>
                 {(() => { const agentTotal = byAgent.reduce((s, a) => s + a.total, 0); return byAgent.map((a, i) => (
                   <tr key={a.agent}>
-                    <td style={tdStyle}>
+                    <td style={TD_STYLE}>
                       <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: PIE_COLORS[i % PIE_COLORS.length], marginRight: 'var(--space-2)' }} />
-                      <span style={monoStyle}>{a.agent}</span>
+                      <span style={MONO_STYLE}>{a.agent}</span>
                     </td>
                     <td style={tdRight}><strong>{fmtTokens(a.total)}</strong></td>
                     <td style={{ ...tdRight, color: 'var(--muted)' }}>{agentTotal > 0 ? fmtPct(a.total / agentTotal, 1) : '—'}</td>
@@ -666,7 +662,7 @@ export default function TokenUsage() {
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>{d.name}</div>
                   <div>{t('tokenUsage.tokens')}: <strong>{fmtTokens(d.value)}</strong></div>
                   <div>{t('tokenUsage.share')}: <strong>{d.pct}</strong></div>
-                  <div>{t('tokenUsage.cost')}: <strong>{fmtCost(d.cost)}</strong></div>
+                  <div>{t('tokenUsage.cost')}: <strong>{fmtCostKpi(d.cost)}</strong></div>
                 </div>);
               }} />
             </PieChart>
@@ -674,10 +670,10 @@ export default function TokenUsage() {
             );
           })()}
           <Card style={{ padding: 0, overflow: 'hidden' }}>
-            <table style={tableStyle}>
+            <table style={TABLE_STYLE}>
               <thead>
                 <tr>
-                  <th style={thStyle}>{t('tokenUsage.model')}</th>
+                  <th style={TH_STYLE}>{t('tokenUsage.model')}</th>
                   <th style={thRight}>{t('tokenUsage.tokens')}</th>
                   <th style={thRight}>{t('tokenUsage.percent')}</th>
                   <th style={thRight}>{t('tokenUsage.cacheHit')}</th>
@@ -688,10 +684,10 @@ export default function TokenUsage() {
               <tbody>
                 {(() => { const modelTotal = modelRows.reduce((s, m) => s + m.total, 0); return modelRows.map((m, i) => (
                   <tr key={m.model}>
-                    <td style={tdStyle}>
+                    <td style={TD_STYLE}>
                       <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: PIE_COLORS[i % PIE_COLORS.length], marginRight: 'var(--space-2)' }} />
-                      <span style={monoStyle}>{m.model}</span>
-                      {'provider' in m && m.provider && <span style={{ ...monoStyle, color: 'var(--muted)' }}> ({m.provider})</span>}
+                      <span style={MONO_STYLE}>{m.model}</span>
+                      {'provider' in m && m.provider && <span style={{ ...MONO_STYLE, color: 'var(--muted)' }}> ({m.provider})</span>}
                     </td>
                     <td style={tdRight}><strong>{fmtTokens(m.total)}</strong></td>
                     <td style={{ ...tdRight, color: 'var(--muted)' }}>{modelTotal > 0 ? fmtPct(m.total / modelTotal, 1) : '—'}</td>
@@ -733,7 +729,7 @@ export default function TokenUsage() {
                   <div style={{ fontWeight: 600, marginBottom: 6 }}>{d.name}</div>
                   <div>{t('tokenUsage.tokens')}: <strong>{fmtTokens(d.tokens)}</strong></div>
                   <div>{t('tokenUsage.share')}: <strong>{pct}</strong></div>
-                  <div>{t('tokenUsage.cost')}: <strong>{fmtCost(d.value)}</strong></div>
+                  <div>{t('tokenUsage.cost')}: <strong>{fmtCostKpi(d.value)}</strong></div>
                 </div>);
               }} />
             </PieChart>
@@ -745,7 +741,7 @@ export default function TokenUsage() {
               <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 'var(--space-2)' }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: CHART_PURPLE, marginRight: 6, verticalAlign: 'middle' }} />{t('tokenUsage.scheduledCron')}</div>
               <div style={{ fontSize: 20, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: CHART_PURPLE }}>{fmtTokens(cronVsManual.cron.tokens)}</div>
               <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-2)', fontSize: 13, color: 'var(--muted)' }}>
-                <span>{fmtCost(cronVsManual.cron.cost)}</span>
+                <span>{fmtCostKpi(cronVsManual.cron.cost)}</span>
                 <span>{cronVsManual.cron.sessions} {t('tokenUsage.sessions').toLowerCase()}</span>
               </div>
             </Card>
@@ -753,7 +749,7 @@ export default function TokenUsage() {
               <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 'var(--space-2)' }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: CHART_BLUE, marginRight: 6, verticalAlign: 'middle' }} />{t('tokenUsage.manualInteractive')}</div>
               <div style={{ fontSize: 20, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: CHART_BLUE }}>{fmtTokens(cronVsManual.manual.tokens)}</div>
               <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-2)', fontSize: 13, color: 'var(--muted)' }}>
-                <span>{fmtCost(cronVsManual.manual.cost)}</span>
+                <span>{fmtCostKpi(cronVsManual.manual.cost)}</span>
                 <span>{cronVsManual.manual.sessions} {t('tokenUsage.sessions').toLowerCase()}</span>
               </div>
             </Card>
@@ -967,7 +963,7 @@ function TokenByAgent() {
 
         <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-3)', fontSize: 13, color: 'var(--muted)' }}>
           <span>{t('tokenUsage.total')}: <strong style={{ color: 'var(--text)' }}>{fmtTokens(totalTokens)}</strong></span>
-          <span>{t('tokenUsage.cost')}: <strong style={{ color: 'var(--text)' }}>{fmtCost(agents.reduce((s, a) => s + a.total_cost, 0))}</strong></span>
+          <span>{t('tokenUsage.cost')}: <strong style={{ color: 'var(--text)' }}>{fmtCostKpi(agents.reduce((s, a) => s + a.total_cost, 0))}</strong></span>
           <span>{t('tokenUsage.sessions')}: <strong style={{ color: 'var(--text)' }}>{agents.reduce((s, a) => s + a.session_count, 0)}</strong></span>
         </div>
       </div>
