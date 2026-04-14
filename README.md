@@ -2,7 +2,7 @@
 
 # claw-lens
 
-[![npm version](https://img.shields.io/npm/v/claw-lens)](https://www.npmjs.com/package/claw-lens)
+[![npm version](https://img.shields.io/npm/v/claw-lens-cli)](https://www.npmjs.com/package/claw-lens-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-green)](https://nodejs.org)
 
@@ -99,13 +99,13 @@ For detailed per-page, per-tab documentation: **[claw-lens.com/monitoring/overvi
 ## Quick Start
 
 ```bash
-npx claw-lens
+npx claw-lens-cli
 ```
 
 Opens `http://localhost:4242`. No account, no config, no data upload.
 
 ```bash
-npm install -g claw-lens   # or install globally
+npm install -g claw-lens-cli   # or install globally
 claw-lens --port 3000      # custom port (default: 4242)
 claw-lens --no-open        # suppress auto-open browser
 ```
@@ -140,7 +140,7 @@ claw-lens runs entirely on your machine. It reads the files OpenClaw already wri
 
 Four principles shape the architecture:
 
-- **Zero configuration** — `npx claw-lens` auto-creates the schema, ingests all session data, and opens the browser. The only prerequisite is Node.js.
+- **Zero configuration** — `npx claw-lens-cli` auto-creates the schema, ingests all session data, and opens the browser. The only prerequisite is Node.js.
 - **Cost first** — USD cost is the primary signal, visible per-session, per-model, and per-agent. Token breakdowns are one layer deeper for when users need them.
 - **Local and read-only** — the server binds to `127.0.0.1`, makes no outbound calls, and never modifies agent files. The only file claw-lens writes is its own SQLite database.
 - **Rule-based security audit** — every tool call is risk-scored at ingestion time with deterministic rules, not ML. Per-agent behavioral baselines detect anomalies. The rules are transparent — read the code and know exactly why something was flagged.

@@ -1,5 +1,5 @@
 {
-  "name": "claw-lens",
+  "name": "claw-lens-cli",
   "version": "0.1.0",
   "description": "Observability devtool for OpenClaw. See what your AI agent is doing — cost monitoring, behavior tracing, and security audit.",
   "bin": {

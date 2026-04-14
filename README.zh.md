@@ -2,7 +2,7 @@
 
 # claw-lens
 
-[![npm version](https://img.shields.io/npm/v/claw-lens)](https://www.npmjs.com/package/claw-lens)
+[![npm version](https://img.shields.io/npm/v/claw-lens-cli)](https://www.npmjs.com/package/claw-lens-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-green)](https://nodejs.org)
 
@@ -99,13 +99,13 @@ claw-lens 就是在这个背景下做的。对 agent 来说，最该盯的不是
 ## 快速开始
 
 ```bash
-npx claw-lens
+npx claw-lens-cli
 ```
 
 打开 `http://localhost:4242`。不用注册，不用配置，不上传任何数据。
 
 ```bash
-npm install -g claw-lens   # 或者用 npm 全局安装
+npm install -g claw-lens-cli   # 或者用 npm 全局安装
 claw-lens --port 3000      # 换端口（默认 4242）
 claw-lens --no-open        # 启动时不自动开浏览器
 ```
@@ -136,7 +136,7 @@ claw-lens 完全跑在本地。它读 OpenClaw 写到磁盘上的文件——ses
 
 四个核心原则：
 
-- **零配置** — `npx claw-lens` 自动建表、导入数据、打开浏览器。装了 Node.js 就能用。
+- **零配置** — `npx claw-lens-cli` 自动建表、导入数据、打开浏览器。装了 Node.js 就能用。
 - **成本优先** — 美元花费是最醒目的数字，session、模型、agent 三个维度都能看到。Token 明细在下一层，想看随时点进去。
 - **本地只读** — 服务只监听 `127.0.0.1`，不往外发请求，不碰 agent 的文件。claw-lens 唯一写的东西是自己的 SQLite 数据库。
 - **规则驱动的安全审计** — 每个 tool call 入库时就用确定性规则打分，不靠机器学习。每个 agent 有自己的行为基线用来检测异常。规则全是透明的——看代码就知道为什么会被标记。
