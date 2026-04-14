@@ -1,6 +1,6 @@
 {
   "name": "claw-lens-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Observability devtool for OpenClaw. See what your AI agent is doing — cost monitoring, behavior tracing, and security audit.",
   "bin": {
     "claw-lens": "dist/bin/claw-lens.js"
@@ -41,9 +41,14 @@
     "node": ">=18"
   },
   "main": "./dist/src/server/index.js",
-  "repository": { "type": "git", "url": "https://github.com/msfirebird/claw-lens" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/msfirebird/claw-lens"
+  },
   "homepage": "https://claw-lens.com",
-  "bugs": { "url": "https://github.com/msfirebird/claw-lens/issues" },
+  "bugs": {
+    "url": "https://github.com/msfirebird/claw-lens/issues"
+  },
   "files": [
     "dist/",
     "README.md",
