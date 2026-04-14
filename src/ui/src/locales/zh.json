@@ -35,6 +35,7 @@
     "healthy": "健康",
     "warning": "警告",
     "error": "错误",
+    "ok": "正常",
     "active": "活跃",
     "idle": "空闲",
     "stale": "不活跃",
@@ -1180,6 +1181,7 @@
     "tier1to5m": "1–5分钟",
     "tier10to60s": "10–60秒",
     "slowCallsLabel": "{{count}} 次调用 {{label}}",
+    "errorCallsLabel": "{{count}} 次错误调用",
     "failedLabel": "失败",
     "atStep": "在步骤 {{step}}",
     "viewArrow": "查看 →",
@@ -1241,16 +1243,6 @@
     "costNote3": "cache_write 的计费方式因提供商而异，有些单独计费，有些将其计入标准输入价格",
     "breakdownLabel": "用量与 Token 构成",
     "costDisclaimer": "费用基于 OpenClaw 内置定价逻辑估算。如需精确账单，请参考您的模型提供商（Anthropic、OpenAI 等）。"
-  },
-  "share": {
-    "snapshot": "分享快照",
-    "snapshotTitle": "将当前页面截图为可分享的图片",
-    "tooltip": "截取你现在看到的这一页——图表、数据全包含。生成 PNG 可直接复制或下载分享。",
-    "capturing": "截图中…",
-    "preview": "快照预览",
-    "copy": "复制图片",
-    "copied": "已复制！",
-    "download": "下载 PNG"
   },
   "clawfish": {
     "tooltipTitle": "龙虾 · {{mood}} · 点击切换心情",

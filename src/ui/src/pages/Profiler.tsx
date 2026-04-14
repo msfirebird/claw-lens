@@ -30,13 +30,14 @@ interface SessionPickerRow {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function fmtPickerTime(ts: number): string {
+  const locale = localStorage.getItem('claw-lens-lang') === 'zh' ? 'zh-CN' : 'en-US';
   const d = new Date(ts);
   const now = new Date();
   const sameYear = d.getFullYear() === now.getFullYear();
   const dateStr = sameYear
-    ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-  const timeStr = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    ? d.toLocaleDateString(locale, { month: 'short', day: 'numeric' })
+    : d.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' });
+  const timeStr = d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
   return `${dateStr} ${timeStr}`;
 }
 
@@ -255,6 +256,7 @@ interface ToolDistribution {
     slow_1m?: DistOutlier[];
     slow_5m?: DistOutlier[];
   };
+  error_calls?: DistOutlier[];
 }
 
 // ── Collapsible tool row with histogram ──────────────────────────────────────
@@ -485,6 +487,43 @@ function ToolProfileRow({
                   );
                 });
               })()}
+
+              {/* Error calls */}
+              {dist.error_calls && dist.error_calls.length > 0 && (
+                <div style={{ marginTop: '.8rem' }}>
+                  <div style={{
+                    fontSize: '.78rem', color: '#ef4444', marginBottom: '.4rem',
+                    display: 'flex', alignItems: 'center', gap: '.3rem',
+                  }}>
+                    ✕ {t('profiler.errorCallsLabel', { count: dist.error_calls.length })}
+                  </div>
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', gap: '.25rem',
+                    ...(dist.error_calls.length > 10 ? { maxHeight: 10 * 32, overflowY: 'auto' as const } : {}),
+                  }}>
+                    {dist.error_calls.map(o => (
+                      <div
+                        key={o.id}
+                        style={{
+                          fontSize: '.76rem', cursor: 'pointer',
+                          padding: '4px 8px', borderRadius: 3,
+                          display: 'flex', alignItems: 'center', gap: '.5rem', flexWrap: 'wrap',
+                        }}
+                        onClick={() => navigate(`/timeline?session=${o.session_id}${o.turn_number > 0 ? `&turn=${o.turn_number}` : ''}`)}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface2)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        <span style={{ fontFamily: 'var(--font-m)', color: 'var(--text)', fontSize: '.74rem' }}>{o.session_id}</span>
+                        {o.duration_ms != null && <span style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{fmtMs(o.duration_ms)}</span>}
+                        <span style={{ color: '#ef4444', fontSize: '.7rem', fontWeight: 600 }}>✕ {t('profiler.failedLabel')}</span>
+                        <span style={{ color: 'var(--muted)', fontSize: '.7rem' }}>{o.agent_name}</span>
+                        {o.turn_number > 0 && <span style={{ color: 'var(--muted)', fontSize: '.7rem' }}>{t('profiler.atStep', { step: o.turn_number })}</span>}
+                        <span style={{ color: '#ef4444', fontSize: '.7rem', marginLeft: 12 }}>{t('profiler.viewArrow')}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <div style={{ fontSize: '.72rem', color: 'var(--muted)' }}>{t('profiler.loadingEllipsis')}</div>

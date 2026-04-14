@@ -183,37 +183,31 @@
   }
 }
 
-/* Settings toggle button */
+/* Settings toggle button — matches RE-INGEST button shape, blue variant */
 .settings-toggle-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-5);
+  padding: 10px 28px;
   border-radius: var(--radius-sm);
+  border: none;
   font-family: var(--font-b);
   font-size: 12px;
   letter-spacing: .1em;
   text-transform: uppercase;
   font-weight: 600;
   cursor: pointer;
-  transition: color .12s, border-color .12s, background .12s;
+  background: #3b82f6;
+  color: #fff;
+  transition: opacity .12s, background .12s;
+}
+.settings-toggle-btn:hover {
+  background: #2563eb;
 }
 .settings-toggle-btn.enabled {
-  background: rgba(99,153,255,0.10);
-  border: 1px solid rgba(99,153,255,0.35);
-  color: rgba(180,210,255,0.92);
+  opacity: 0.5;
 }
 .settings-toggle-btn.enabled:hover {
-  background: rgba(99,153,255,0.18);
-  border-color: rgba(99,153,255,0.65);
-  color: #fff;
-}
-.settings-toggle-btn.disabled {
-  background: #3b82f6;
-  border: none;
-  color: #fff;
-}
-.settings-toggle-btn.disabled:hover {
-  background: #2563eb;
+  opacity: 0.7;
 }

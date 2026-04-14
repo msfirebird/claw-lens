@@ -145,7 +145,7 @@ function RunTrendChart({ runs }: { runs: CronRun[] }) {
               formatter={(v) => [`${v}s`, t('common.duration')]}
               labelFormatter={(_, payload) => {
                 const d = payload?.[0]?.payload;
-                return d ? `${d.label} — ${d.isErr ? 'ERROR' : 'OK'}` : '';
+                return d ? `${d.label} — ${d.isErr ? t('common.error') : t('common.ok')}` : '';
               }}
             />
             {avgSec > 0 && (
@@ -206,7 +206,7 @@ function RunCard({ run, period }: { run: CronRun; period?: string }) {
             {t('common.status')}
           </span>
           <span style={{ fontSize: 14, fontWeight: 700, color: statusColor(run.status), display: 'flex', alignItems: 'center', gap: 5 }}>
-            <StatusIcon s={run.status} size={15} /> {run.status.toUpperCase()}
+            <StatusIcon s={run.status} size={15} /> {run.status === 'error' || run.status === 'failed' ? t('common.error') : run.status === 'ok' || run.status === 'success' ? t('common.ok') : run.status}
           </span>
         </div>
 
@@ -394,7 +394,7 @@ function JobRow({ job, onToggle }: { job: CronJob; onToggle: (id: string, enable
               background: isFailed ? 'rgba(239,68,68,0.10)' : 'rgba(34,197,94,0.10)',
               padding: '3px 10px', borderRadius: 'var(--radius-sm)',
             }}>
-              {lastStatus}
+              {lastStatus === 'error' || lastStatus === 'failed' ? t('common.error') : lastStatus === 'ok' || lastStatus === 'success' ? t('common.ok') : lastStatus}
             </span>
           ) : <span style={{ color: 'var(--faint)', fontSize: 13 }}>—</span>}
         </div>

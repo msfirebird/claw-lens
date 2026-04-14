@@ -3,7 +3,7 @@ import Database from 'better-sqlite3';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getContextLimit } from '../model-meta';
-import { getClawHome } from '../paths';
+import { getClawHome, listRegisteredAgents, cleanSlackText } from '../paths';
 
 interface AgentConfig {
   files: number;
@@ -75,17 +75,8 @@ function readAgentConfig(agentId: string, db: Database.Database): AgentConfig {
   }
 }
 
-/** All agent names that exist as directories under ~/.openclaw/agents/ */
-function listAgentDirs(): string[] {
-  try {
-    const agentsDir = path.join(getClawHome(), 'agents');
-    return fs.readdirSync(agentsDir).filter(name => {
-      try { return fs.statSync(path.join(agentsDir, name)).isDirectory(); } catch { return false; }
-    });
-  } catch {
-    return [];
-  }
-}
+/** Registered agent names (delegates to shared helper in paths.ts). */
+const listAgentDirs = listRegisteredAgents;
 
 const HEARTBEAT_RE = /\b(heartbeat|heart.beat|health.?check|ping|keep.?alive)\b/i;
 
@@ -244,16 +235,8 @@ function getLastUserMessage(agentId: string): LastUserMessage | null {
       // Detect source before stripping
       const isSlack = /slack/i.test(text.slice(0, 120));
 
-      // Strip cron prefix
-      text = text.replace(/^\[cron:[^\]]+\]\s*/, '').trim();
-      // Strip "System: [timestamp] Slack DM/message ... from user: " prefix
-      text = text.replace(/^System:\s*\[\d{4}-\d{2}-\d{2}[^\]]*\]\s*Slack[^:]+:\s*/i, '').trim();
-      // Strip "[timestamp] Slack message in #channel from user: " prefix (no "System:" leader)
-      text = text.replace(/^\[\d{4}-\d{2}-\d{2}[^\]]*\]\s*Slack[^:]+:\s*/i, '').trim();
-      // Trim off trailing "\n\nConversation info (untrusted metadata)..." block
-      const metaIdx = text.indexOf('\n\nConversation info');
-      if (metaIdx !== -1) text = text.slice(0, metaIdx).trim();
-      if (text.indexOf('Conversation info (untrusted metadata)') === 0) continue;
+      text = cleanSlackText(text);
+      if (text.startsWith('Conversation info (untrusted metadata)')) continue;
       if (text.startsWith('[media attached:')) continue; // skip screenshot/image-only messages
       if (!text) continue;
 
@@ -430,7 +413,7 @@ export function statsRouter(db: Database.Database): Router {
         : hasFailures ? 'stuck' : 'running';
 
       const taskSummary = session.task_summary
-        ? session.task_summary.replace(/^System:\s*\[\d{4}-\d{2}-\d{2}[^\]]*\]\s*/, '').slice(0, 80)
+        ? cleanSlackText(session.task_summary).slice(0, 80) || null
         : null;
 
       const steps = buildSteps(row.file_path, status);
@@ -849,7 +832,7 @@ export function statsRouter(db: Database.Database): Router {
           last_7d:   { sessions: 0, cost: 0 },
           hourly:    [],
         })),
-    ];
+    ].filter(a => a.dir_exists);
 
     const summary = {
       total:   agents.length,

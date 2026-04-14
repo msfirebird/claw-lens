@@ -20,25 +20,57 @@ claw-lens is built for this new reality. Cost, not latency, is the dominant sign
 
 ---
 
-## Screenshot
+<h2 id="screenshot">Screenshot</h2>
 
-<table border="0" cellspacing="0" cellpadding="4">
-  <tr>
-    <td colspan="2" style="border:none;padding:4px"><img src="./assets/screenshots/overview_kpi.png" width="100%" alt="Overview KPI"></td>
-  </tr>
-  <tr>
-    <td style="border:none;padding:4px"><img src="./assets/screenshots/overview_agent.png" width="100%" alt="Agent"></td>
-    <td style="border:none;padding:4px"><img src="./assets/screenshots/overview_model.png" width="100%" alt="Model"></td>
-  </tr>
-  <tr>
-    <td style="border:none;padding:4px"><img src="./assets/screenshots/overview_session.png" width="100%" alt="Sessions"></td>
-    <td style="border:none;padding:4px"><img src="./assets/screenshots/overview_cron.png" width="100%" alt="Cron Call"></td>
-  </tr>
-  <tr>
-    <td style="border:none;padding:4px"><img src="./assets/screenshots/overview_live.png" width="100%" alt="Live"></td>
-    <td style="border:none;padding:4px"><img src="./assets/screenshots/overview_activity.png" width="100%" alt="Activities"></td>
-  </tr>
-</table>
+![Overview](./assets/en_screenshot/overview.png)
+
+<details id="more-details">
+<summary>More Details (TL;DR)</summary>
+
+### Token Usage
+![Token Usage](./assets/en_screenshot/token.png)
+
+### Agents
+![Agents](./assets/en_screenshot/agents.png)
+
+### Live Monitor
+![Live Monitor](./assets/en_screenshot/live.png)
+
+### Sessions
+![Sessions](./assets/en_screenshot/sessions.png)
+![Session Details](./assets/en_screenshot/sessions_details.png)
+![Session Messages](./assets/en_screenshot/sessions_msg.png)
+
+### Cron
+![Cron](./assets/en_screenshot/cron.png)
+
+### Memory
+![Memory](./assets/en_screenshot/memory.png)
+
+### Audit
+![Audit](./assets/en_screenshot/audit.png)
+![Audit Event Details](./assets/en_screenshot/audit_eventdetails.png)
+![Audit Agent Status](./assets/en_screenshot/audit_agentstatus.png)
+
+### Session Timeline
+![Timeline](./assets/en_screenshot/timeline.png)
+![Timeline Error Step](./assets/en_screenshot/timeline_errorstep.png)
+
+### Profiler
+![Profiler](./assets/en_screenshot/profiler.png)
+
+### Deep Turns
+![Deep Turns](./assets/en_screenshot/deepturn.png)
+
+### Context Breakdown
+![Context Breakdown](./assets/en_screenshot/contextbreakdown.png)
+
+### Cache Trace
+![Cache Trace](./assets/en_screenshot/cachetrace.png)
+
+[Back to top](#more-details)
+
+</details>
 
 ---
 
@@ -57,7 +89,6 @@ claw-lens is built for this new reality. Cost, not latency, is the dominant sign
 - **Deep Turns** — detects deep turn sequences with repetitive tool patterns, unique-ratio scoring, and per-agent breakdown
 - **Context Breakdown** — per-turn context window fill visualization with system/history/tool-result token splits and model-accurate capacity gauge
 - **Cache Trace** — step-through replay of OpenClaw's cache trace logs, showing stage progression, digest changes, and model config
-- **Share Snapshot** — capture any page as a watermarked PNG image for sharing in chat threads or docs
 - **i18n** — English and Chinese interface
 - **All data stays local** — reads from OpenClaw's JSONL logs on disk, no data sent to any external server
 

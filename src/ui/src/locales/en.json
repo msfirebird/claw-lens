@@ -35,6 +35,7 @@
     "healthy": "Healthy",
     "warning": "Warning",
     "error": "Error",
+    "ok": "OK",
     "active": "Active",
     "idle": "Idle",
     "stale": "Stale",
@@ -1180,6 +1181,7 @@
     "tier1to5m": "1–5min",
     "tier10to60s": "10–60s",
     "slowCallsLabel": "{{count}} calls {{label}}",
+    "errorCallsLabel": "{{count}} error calls",
     "failedLabel": "failed",
     "atStep": "at step {{step}}",
     "viewArrow": "view →",
@@ -1241,16 +1243,6 @@
     "msgs": "msgs",
     "view": "view →",
     "avgPerSession": "Avg/session"
-  },
-  "share": {
-    "snapshot": "Share Snapshot",
-    "snapshotTitle": "Capture this page as a shareable image",
-    "tooltip": "Captures exactly what you see right now — charts, tables, and all. Save as PNG to copy or download anywhere.",
-    "capturing": "Capturing…",
-    "preview": "Snapshot Preview",
-    "copy": "Copy Image",
-    "copied": "Copied!",
-    "download": "Download PNG"
   },
   "clawfish": {
     "tooltipTitle": "Lobster · {{mood}} · click to change mood",

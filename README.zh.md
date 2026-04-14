@@ -20,44 +20,75 @@ claw-lens 就是在这个背景下做的。对 agent 来说，最该盯的不是
 
 ---
 
-## 截图
+<h2 id="screenshot">截图</h2>
 
-<table border="0" cellspacing="0" cellpadding="4">
-  <tr>
-    <td colspan="2" style="border:none;padding:4px"><img src="./assets/screenshots/overview_kpi.png" width="100%" alt="Overview KPI"></td>
-  </tr>
-  <tr>
-    <td style="border:none;padding:4px"><img src="./assets/screenshots/overview_agent.png" width="100%" alt="Agent"></td>
-    <td style="border:none;padding:4px"><img src="./assets/screenshots/overview_model.png" width="100%" alt="Model"></td>
-  </tr>
-  <tr>
-    <td style="border:none;padding:4px"><img src="./assets/screenshots/overview_session.png" width="100%" alt="Sessions"></td>
-    <td style="border:none;padding:4px"><img src="./assets/screenshots/overview_cron.png" width="100%" alt="Cron Call"></td>
-  </tr>
-  <tr>
-    <td style="border:none;padding:4px"><img src="./assets/screenshots/overview_live.png" width="100%" alt="Live"></td>
-    <td style="border:none;padding:4px"><img src="./assets/screenshots/overview_activity.png" width="100%" alt="Activities"></td>
-  </tr>
-</table>
+![Overview](./assets/zh_screenshot/zh_overview.png)
+
+<details id="more-details">
+<summary>更多截图（有点长，可以过后再读）</summary>
+
+### Token 用量
+![Token 用量](./assets/zh_screenshot/zh_token.png)
+
+### 智能体
+![智能体](./assets/zh_screenshot/zh_agents.png)
+
+### 实时监控
+![实时监控](./assets/zh_screenshot/zh_live.png)
+
+### 会话
+![会话](./assets/zh_screenshot/zh_sessions.png)
+![会话详情](./assets/zh_screenshot/zh_sessions_details.png)
+![会话消息](./assets/zh_screenshot/zh_sessions_msg.png)
+
+### 定时任务
+![定时任务](./assets/zh_screenshot/zh_cron.png)
+
+### 记忆
+![记忆](./assets/zh_screenshot/zh_memory.png)
+
+### 安全审计
+![安全审计](./assets/zh_screenshot/zh_audit.png)
+![审计事件详情](./assets/zh_screenshot/zh_audit_eventdetails.png)
+![审计智能体状态](./assets/zh_screenshot/zh_audit_agentstatus.png)
+
+### 时间线
+![时间线](./assets/zh_screenshot/zh_timeline.png)
+![时间线错误步骤](./assets/zh_screenshot/zh_timeline_errorstep.png)
+
+### 性能分析
+![性能分析](./assets/zh_screenshot/zh_profiler.png)
+
+### 深度轮次
+![深度轮次](./assets/zh_screenshot/zh_deepturn.png)
+
+### 上下文拆解
+![上下文拆解](./assets/zh_screenshot/zh_contextbreakdown.png)
+
+### 缓存追踪
+![缓存追踪](./assets/zh_screenshot/zh_cachetrace.png)
+
+[回到顶部](#more-details)
+
+</details>
 
 ---
 
 ## 功能
 
-- **Overview** — KPI 一览（今日花费、token 用量、session 数、报错数、缓存效率），7 天走势，周环比，按模型的成本分布，活跃 agent 列表
-- **Token Usage** — 四维成本拆解（input、output、cache read、cache write），支持按 agent、模型、时间段看；缓存命中率；定时任务和手动任务的成本对比
-- **Agents** — 每个 agent 的统计数据、花费、session 数，以及 agent 的记忆文件
-- **Live Monitor** — 实时 agent 活动流，通过 WebSocket 接 OpenClaw Gateway
-- **Sessions** — session 列表，可以按 agent、模型、日期、成本筛选；带上下文健康度标识；每个 session 都能展开看完整的 tool call 链路
-- **Cron** — 定时任务列表、历次运行记录、状态和成本
-- **Memory** — 查看所有 agent 的工作区和记忆文件
-- **Audit** — 安全事件时间线，用规则做风险评分（高/中/低），覆盖文件访问、shell 命令、外部 HTTP 请求、敏感数据检测（34 种正则）、提示词注入检测（9 种模式），还有基于 30 天行为基线的异常检测
-- **Session Timeline** — 单个 session 的逐轮消息回放，带 token 数、停止原因、tool call 详情
-- **Profiler** — 按 token 消耗给 session 排名，工具耗时分析
-- **Deep Turns** — 发现深层轮次里的重复 tool 调用模式，带唯一性评分和按 agent 分组
-- **Context Breakdown** — 逐轮上下文窗口占用图，拆成 system / history / tool-result 三块，刻度精确到模型的真实容量上限
-- **Cache Trace** — 逐步回放 OpenClaw 的缓存日志，看每个阶段的变化、digest diff 和模型配置
-- **Share Snapshot** — 任意页面一键截图，生成带水印的 PNG，直接丢到群里或贴进文档
+- **概览** — KPI 一览（今日花费、token 用量、session 数、报错数、缓存效率），7 天走势，周环比，按模型的成本分布，活跃 agent 列表
+- **Token 用量** — 四维成本拆解（input、output、cache read、cache write），支持按 agent、模型、时间段看；缓存命中率；定时任务和手动任务的成本对比
+- **智能体** — 每个 agent 的统计数据、花费、session 数，以及 agent 的记忆文件
+- **实时监控** — 实时 agent 活动流，通过 WebSocket 接 OpenClaw Gateway
+- **会话** — session 列表，可以按 agent、模型、日期、成本筛选；带上下文健康度标识；每个 session 都能展开看完整的 tool call 链路
+- **定时任务** — 定时任务列表、历次运行记录、状态和成本
+- **记忆** — 查看所有 agent 的工作区和记忆文件
+- **安全审计** — 安全事件时间线，用规则做风险评分（高/中/低），覆盖文件访问、shell 命令、外部 HTTP 请求、敏感数据检测（34 种正则）、提示词注入检测（9 种模式），还有基于 30 天行为基线的异常检测
+- **时间线** — 单个 session 的逐轮消息回放，带 token 数、停止原因、tool call 详情
+- **性能分析** — 按 token 消耗给 session 排名，工具耗时分析
+- **深度轮次** — 发现深层轮次里的重复 tool 调用模式，带唯一性评分和按 agent 分组
+- **上下文拆解** — 逐轮上下文窗口占用图，拆成 system / history / tool-result 三块，刻度精确到模型的真实容量上限
+- **缓存追踪** — 逐步回放 OpenClaw 的缓存日志，看每个阶段的变化、digest diff 和模型配置
 - **i18n** — 中英文双语界面
 - **数据全部留在本地** — 只读 OpenClaw 本地的 JSONL 日志，不往任何外部服务器发数据
 

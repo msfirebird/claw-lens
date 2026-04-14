@@ -148,12 +148,16 @@ export default function AgentLoops() {
   // Backend accepts ?agent= and ?from= so filtering happens in SQL. Previously the
   // frontend re-filtered a truncated top-100 list, which produced wrong totals when
   // the real dataset was larger than 100 loopy turns.
-  const fromTs = timeRangeFrom(timeRange);
-  const qs = new URLSearchParams();
-  if (agent !== 'all') qs.set('agent', agent);
-  if (fromTs > 0)      qs.set('from', String(fromTs));
-  const loopsUrl = `/api/profiler/loops${qs.toString() ? '?' + qs.toString() : ''}`;
-  const { data, error } = useFetch<DeepTurnsData>(loopsUrl, [agent, timeRange]);
+  // Memoize the URL so Date.now() is only evaluated when filters actually change,
+  // preventing infinite re-fetch loops that cause flickering.
+  const loopsUrl = useMemo(() => {
+    const fromTs = timeRangeFrom(timeRange);
+    const qs = new URLSearchParams();
+    if (agent !== 'all') qs.set('agent', agent);
+    if (fromTs > 0)      qs.set('from', String(fromTs));
+    return `/api/profiler/loops${qs.toString() ? '?' + qs.toString() : ''}`;
+  }, [agent, timeRange]);
+  const { data, error } = useFetch<DeepTurnsData>(loopsUrl, [loopsUrl]);
 
   // Agent dropdown list must NOT shrink when the user picks an agent. Fetch the
   // full agent roster from /api/stats, which always returns every known agent.

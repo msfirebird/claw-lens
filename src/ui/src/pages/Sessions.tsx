@@ -150,23 +150,20 @@ export default function Sessions() {
     return list;
   }, [sessions, agentFilter, cronFilter, sortBy, sessionIdFilter]);
 
-  // ── KPI computations ──
+  // ── KPI computations (derived from filtered list so all filters apply) ──
   const kpis = useMemo(() => {
     const now = Date.now();
     const todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0);
     const d7 = now - 7 * 86400000;
     const d30 = now - 30 * 86400000;
-    const allSessions = sessions || [];
-    const totalSessions = allSessions.length;
-    const activeNow = allSessions.filter(s => s.last_message_at && (now - s.last_message_at) < ACTIVE_SESSION_THRESHOLD_MS).length; // active in last 10 min
-    // Time windows bucket by last activity, not session start, so a cross-midnight
-    // session correctly counts as "today". Matches the backend in /api/stats/agents.
+    const totalSessions = filtered.length;
+    const activeNow = filtered.filter(s => s.last_message_at && (now - s.last_message_at) < ACTIVE_SESSION_THRESHOLD_MS).length;
     const activeTs = (s: Session) => s.last_message_at ?? s.started_at;
-    const errorsToday = allSessions.filter(s => s.error_count > 0 && activeTs(s) >= todayMidnight.getTime()).length;
-    const errors7d = allSessions.filter(s => s.error_count > 0 && activeTs(s) >= d7).length;
-    const errors30d = allSessions.filter(s => s.error_count > 0 && activeTs(s) >= d30).length;
+    const errorsToday = filtered.filter(s => s.error_count > 0 && activeTs(s) >= todayMidnight.getTime()).length;
+    const errors7d = filtered.filter(s => s.error_count > 0 && activeTs(s) >= d7).length;
+    const errors30d = filtered.filter(s => s.error_count > 0 && activeTs(s) >= d30).length;
     return { totalSessions, activeNow, errorsToday, errors7d, errors30d };
-  }, [sessions]);
+  }, [filtered]);
 
   // Cost Delta: per-step cost
   const costGrowthData = (messages || []).filter(m => m.role === 'assistant').map(msg => ({
@@ -385,7 +382,7 @@ export default function Sessions() {
               <tbody>
                 {filtered.map(s => {
                   const rate = cacheHitRate(s.cache_read || 0, s.input_tokens || 0);
-                  const hitPct = fmtPct(rate, 1);
+                  const hitPct = fmtPct(rate, 4);
                   const hitClr = rate >= 0.8 ? 'var(--green, #22c55e)' : rate >= 0.5 ? 'var(--yellow, #eab308)' : 'var(--red, #ef4444)';
                   const pColor = s.utilizationPct >= 90 ? '#ef4444' : s.utilizationPct >= 70 ? '#eab308' : '#22c55e';
                   const pBg = s.utilizationPct >= 90 ? 'rgba(239,68,68,0.15)' : s.utilizationPct >= 70 ? 'rgba(234,179,8,0.15)' : 'rgba(34,197,94,0.15)';
@@ -535,7 +532,7 @@ export default function Sessions() {
                                   {detailCache && detailCache.barTotal > 0 ? (<>
                                     <div style={{ fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 'var(--space-2)' }}>{t('sessions.cache')}</div>
                                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
-                                      <span style={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: detailCache.rate >= 0.8 ? 'var(--C-green)' : detailCache.rate >= 0.5 ? 'var(--C-amber)' : 'var(--C-rose)' }}>{fmtPct(detailCache.rate)}</span>
+                                      <span style={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: detailCache.rate >= 0.8 ? 'var(--C-green)' : detailCache.rate >= 0.5 ? 'var(--C-amber)' : 'var(--C-rose)' }}>{fmtPct(detailCache.rate, 4)}</span>
                                       <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t('sessions.cacheHitRateLabel')}</span>
                                     </div>
                                     <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', background: 'var(--surface2)', marginBottom: 'var(--space-2)' }}>

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import Database from 'better-sqlite3';
+import { listRegisteredAgents } from '../paths';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -194,7 +195,7 @@ export function auditRouter(db: Database.Database): Router {
 
       const elevCount = (db.prepare("SELECT COUNT(*) as cnt FROM audit_events WHERE agent_id = ? AND risk_flags LIKE '%elevated_cmd%'").get(agent_id) as { cnt: number }).cnt;
       if (elevCount >= 5) {
-        recs.push({ severity: 'low', message: `Ran ${elevCount} elevated commands (sudo, ssh, curl, etc.)`, action: 'Review if these commands are necessary.' });
+        recs.push({ severity: 'medium', message: `Ran ${elevCount} elevated commands (sudo, ssh, curl, etc.)`, action: 'Review if these commands are necessary.' });
       }
 
       return { agent_id, highCount, mediumCount, lowCount, tools, topDirs, totalDirs, domains, recommendations: recs };
@@ -218,8 +219,10 @@ export function auditRouter(db: Database.Database): Router {
       "SELECT COUNT(*) as cnt FROM sensitive_findings WHERE pattern_type IN ('instruction_override','new_instructions','role_hijack','exfil_request','exfil_url','base64_payload','delimiter_escape','xml_injection','dan_jailbreak') AND dismissed = 0"
     ).get() as { cnt: number }).cnt;
 
-    // Agent trust labels + verdicts
-    const agents = db.prepare('SELECT DISTINCT agent_id FROM audit_events').all() as { agent_id: string }[];
+    // Agent trust labels + verdicts (only registered agents)
+    const registeredSummary = new Set(listRegisteredAgents());
+    const agents = (db.prepare('SELECT DISTINCT agent_id FROM audit_events').all() as { agent_id: string }[])
+      .filter(a => registeredSummary.has(a.agent_id));
     const agentTrust: Record<string, string> = {};
     const agentVerdicts: Record<string, string> = {};
     for (const { agent_id } of agents) {
@@ -230,10 +233,11 @@ export function auditRouter(db: Database.Database): Router {
     res.json({ totalEvents, highRiskEvents, mediumRiskEvents, lowRiskEvents, sensitiveDataEvents, dangerousCmdEvents, activeFindings, dismissedFindings, injectionCount, agentTrust, agentVerdicts });
   });
 
-  // GET /api/audit/agents — list distinct agents with audit data
+  // GET /api/audit/agents — list distinct agents with audit data (only registered agents)
   r.get('/agents', (_req, res) => {
+    const registered = new Set(listRegisteredAgents());
     const rows = db.prepare("SELECT DISTINCT agent_id FROM audit_events ORDER BY agent_id").all() as { agent_id: string }[];
-    res.json(rows.map(r => r.agent_id));
+    res.json(rows.map(r => r.agent_id).filter(id => registered.has(id)));
   });
 
   // GET /api/audit/facets — distinct event types + severities for facet chips

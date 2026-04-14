@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import Database from 'better-sqlite3';
+import { listRegisteredAgents } from '../paths';
 export function tokensRouter(db: Database.Database): Router {
   const r = Router();
 
@@ -120,8 +121,10 @@ export function tokensRouter(db: Database.Database): Router {
     }[];
 
     // ── By Agent ──
-    // Get all known agents (including those with no activity in range)
-    const allAgents = db.prepare('SELECT DISTINCT agent_name FROM sessions').all() as { agent_name: string }[];
+    // Only include registered agents (from openclaw.json agents.list)
+    const registered = new Set(listRegisteredAgents());
+    const allAgents = (db.prepare('SELECT DISTINCT agent_name FROM sessions').all() as { agent_name: string }[])
+      .filter(a => registered.has(a.agent_name));
     const agentStats = db.prepare(`
       SELECT
         s.agent_name                       AS agent,
@@ -252,12 +255,14 @@ export function tokensRouter(db: Database.Database): Router {
       ORDER BY bucket ASC
     `).all(...params);
 
-    // Available agents for filter dropdown
-    const agents = db.prepare(`
+    // Available agents for filter dropdown (only registered agents)
+    const registeredTrend = new Set(listRegisteredAgents());
+    const agents = (db.prepare(`
       SELECT DISTINCT s.agent_name
       FROM messages m JOIN sessions s ON m.session_id = s.id
       WHERE m.role = 'assistant' AND m.timestamp >= ?
-    `).all(cutoff) as { agent_name: string }[];
+    `).all(cutoff) as { agent_name: string }[])
+      .filter(a => registeredTrend.has(a.agent_name));
 
     res.json({
       data: rows,

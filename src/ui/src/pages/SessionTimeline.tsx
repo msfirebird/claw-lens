@@ -661,13 +661,14 @@ function JsonView({ raw, maxHeight = 180 }: { raw: string; maxHeight?: number })
 
 /* ── helpers ── */
 function fmtActiveTime(ts: number): string {
+  const locale = localStorage.getItem('claw-lens-lang') === 'zh' ? 'zh-CN' : 'en-US';
   const d = new Date(ts);
   const now = new Date();
   const sameYear = d.getFullYear() === now.getFullYear();
   const dateStr = sameYear
-    ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-  const timeStr = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    ? d.toLocaleDateString(locale, { month: 'short', day: 'numeric' })
+    : d.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' });
+  const timeStr = d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
   return `${dateStr} ${timeStr}`;
 }
 

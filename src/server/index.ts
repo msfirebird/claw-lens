@@ -85,11 +85,11 @@ export async function startServer(opts: ServerOptions = {}): Promise<void> {
   });
 
   // Serve built UI if available
-  // Compiled: __dirname = <project>/dist/src/server → ../../../src/ui/dist = <project>/src/ui/dist
+  // Compiled: __dirname = <project>/dist/src/server → ../../../dist/ui = <project>/dist/ui
   // ts-node-dev: __dirname = <project>/src/server → use process.cwd() fallback
-  const uiDist = fs.existsSync(path.join(__dirname, '../../../src/ui/dist'))
-    ? path.join(__dirname, '../../../src/ui/dist')
-    : path.join(process.cwd(), 'src/ui/dist');
+  const uiDist = fs.existsSync(path.join(__dirname, '../../../dist/ui'))
+    ? path.join(__dirname, '../../../dist/ui')
+    : path.join(process.cwd(), 'dist/ui');
   if (fs.existsSync(uiDist)) {
     app.use(express.static(uiDist));
     app.get('*', (_req, res) => {

@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import Database from 'better-sqlite3';
 import { findSessionFiles, CLOSED_STOP_REASONS } from '../parser';
 import { getContextLimit } from '../model-meta';
-import { getClawHome } from '../paths';
+import { getClawHome, cleanSlackText } from '../paths';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -192,18 +192,13 @@ export function sessionsRouter(db: Database.Database): Router {
           let newUserMsg: string | null = null;
           for (const b of blocks) {
             if (b.type !== 'text') continue;
-            let text = ((b.text as string) ?? '').trim();
-            // Strip cron / slack prefixes
-            text = text.replace(/^\[cron:[^\]]+\]\s*/, '');
-            text = text.replace(/^System:\s*\[\d{4}-\d{2}-\d{2}[^\]]*\]\s*Slack[^:]+:\s*/i, '');
-            text = text.replace(/^\[\d{4}-\d{2}-\d{2}[^\]]*\]\s*Slack[^:]+:\s*/i, '');
-            text = text.replace(/\n\nConversation info[\s\S]*/m, '').trim();
+            const text = cleanSlackText(((b.text as string) ?? '').trim());
             if (text.length >= 6 && !text.startsWith('[media attached')) {
               newUserMsg = text.length > 140 ? text.slice(0, 140) + '…' : text;
             }
           }
           if (typeof msg.content === 'string') {
-            let text = (msg.content as string).replace(/^\[cron:[^\]]+\]\s*/, '').trim();
+            const text = cleanSlackText((msg.content as string).trim());
             if (text.length >= 6) newUserMsg = text.length > 140 ? text.slice(0, 140) + '…' : text;
           }
           // New user message = new task; reset turns so we only show what follows

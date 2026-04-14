@@ -70,14 +70,15 @@ interface MemoryFileEntry {
 type AgentFiles = Record<string, MemoryFileEntry[]>;
 
 function fmtMtime(ms: number) {
+  const locale = localStorage.getItem('claw-lens-lang') === 'zh' ? 'zh-CN' : 'en-US';
   const d = new Date(ms);
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffH = diffMs / 3600000;
   if (diffH < 24) {
-    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
   }
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
 }
 
 

@@ -6,6 +6,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { glob } from 'glob';
 import Database from 'better-sqlite3';
 import { ingestAll } from '../db';
+import { listRegisteredAgents } from '../paths';
 
 const DEFAULT_GATEWAY_PORT = 18789;
 const MAX_RECONNECT_BACKOFF_MS = 30_000;
@@ -95,6 +96,7 @@ function readFilesFromDir(wsDir: string, agentName: string, result: Record<strin
 export function readAgentFiles(clawHome?: string): Record<string, MemoryFileEntry[]> {
   const base = clawHome || process.env.OPENCLAW_HOME || path.join(os.homedir(), '.openclaw');
   const result: Record<string, MemoryFileEntry[]> = {};
+  const registered = new Set(listRegisteredAgents());
 
   // Strategy 1: ~/.openclaw/workspace-<agent>/ and ~/.openclaw/workspace/ (main)
   try {
@@ -103,6 +105,7 @@ export function readAgentFiles(clawHome?: string): Record<string, MemoryFileEntr
     });
     for (const dir of entries) {
       const agentName = dir === 'workspace' ? 'main' : dir.replace('workspace-', '');
+      if (!registered.has(agentName)) continue;
       readFilesFromDir(path.join(base, dir), agentName, result);
     }
   } catch { /* skip */ }
@@ -114,6 +117,7 @@ export function readAgentFiles(clawHome?: string): Record<string, MemoryFileEntr
       try { return fs.statSync(path.join(agentsDir, f)).isDirectory(); } catch { return false; }
     });
     for (const agent of agents) {
+      if (!registered.has(agent)) continue;
       readFilesFromDir(path.join(agentsDir, agent, 'workspace'), agent, result);
     }
   } catch { /* skip */ }

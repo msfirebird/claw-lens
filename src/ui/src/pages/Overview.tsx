@@ -360,7 +360,7 @@ export default function Overview() {
             fontVariantNumeric: 'tabular-nums',
             color: hitRate > 0.8 ? 'var(--C-green)' : hitRate > 0.5 ? 'var(--C-amber)' : 'var(--C-rose)',
           }}>
-            {fmtPct(hitRate, 1)}
+            {fmtPct(hitRate, 4)}
           </div>
           <div className="kl">{t('overview.cacheEfficiency')}</div>
         </div>

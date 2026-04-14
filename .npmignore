@@ -8,3 +8,4 @@ bin/*.ts
 .env.*.local
 .DS_Store
 .claude/
+assets/

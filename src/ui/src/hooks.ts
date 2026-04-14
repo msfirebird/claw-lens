@@ -220,23 +220,24 @@ export function fmtPct(n: number | null | undefined, decimals = 1): string {
 }
 
 export function fmtTs(input: number | string, opts?: { seconds?: boolean }): string {
+  const locale = localStorage.getItem('claw-lens-lang') === 'zh' ? 'zh-CN' : 'en-US';
   const d = new Date(input);
   const now = new Date();
   const isMs = typeof input === 'number';
 
   if (isMs) {
     const sameDay = d.toDateString() === now.toDateString();
-    if (sameDay) return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    if (sameDay) return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleDateString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   }
 
   const sameYear = d.getFullYear() === now.getFullYear();
   const dateStr = sameYear
-    ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    ? d.toLocaleDateString(locale, { month: 'short', day: 'numeric' })
+    : d.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' });
   const timeOpts: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' };
   if (opts?.seconds) timeOpts.second = '2-digit';
-  return `${dateStr} ${d.toLocaleTimeString('en-US', timeOpts)}`;
+  return `${dateStr} ${d.toLocaleTimeString(locale, timeOpts)}`;
 }
 
 /* ── Shared styles ── */

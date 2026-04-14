@@ -136,9 +136,9 @@ function TokenTrend() {
   const lang = i18n.language;
   const [trendAgent, setTrendAgent] = useState('all');
   const [trendGran, setTrendGran] = useState<'day' | 'hour' | 'week'>('day');
-  const [calOpen, setCalOpen] = useState(false); void calOpen;
   // For "By Day": the start of the 7-day window (a Monday-ish)
-  const today = new Date(); today.setHours(0,0,0,0);
+  const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
+
   const [dayWindowEnd, setDayWindowEnd] = useState(today);
   // For "By Hour": which single day to show
   const [hourDate, setHourDate] = useState(today);
@@ -252,7 +252,6 @@ function TokenTrend() {
 
   const handleGranChange = (g: 'day' | 'hour' | 'week') => {
     setTrendGran(g);
-    setCalOpen(false);
     if (g === 'day') setDayWindowEnd(today);
     else if (g === 'hour') setHourDate(today);
   };
@@ -434,7 +433,7 @@ function PeriodRow({ label, data: d, active, onClick }: { label: string; data: T
       </div>
       {/* Footer stats */}
       <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-3)', fontSize: 12, color: 'var(--muted)', flexWrap: 'wrap' }}>
-        <span>{t('tokenUsage.cacheHit')}: <span style={{ color: hitRateColor(d.cacheHitRate), fontWeight: 500 }}>{fmtPct(d.cacheHitRate)}</span></span>
+        <span>{t('tokenUsage.cacheHit')}: <span style={{ color: hitRateColor(d.cacheHitRate), fontWeight: 500 }}>{fmtPct(d.cacheHitRate, 4)}</span></span>
       </div>
       <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-2)', fontSize: 12, color: 'var(--muted)', flexWrap: 'wrap' }}>
         <span>{d.sessionCount} {t('tokenUsage.sessions').toLowerCase()}</span>
@@ -619,7 +618,7 @@ export default function TokenUsage() {
                     </td>
                     <td style={tdRight}><strong>{fmtTokens(a.total)}</strong></td>
                     <td style={{ ...tdRight, color: 'var(--muted)' }}>{agentTotal > 0 ? fmtPct(a.total / agentTotal, 1) : '—'}</td>
-                    <td style={{ ...tdRight, color: hitRateColor((a.cacheRead + a.input) > 0 ? a.cacheRead / (a.cacheRead + a.input) : 0), fontWeight: 500 }}>{(a.cacheRead + a.input) > 0 ? fmtPct(a.cacheRead / (a.cacheRead + a.input), 1) : '—'}</td>
+                    <td style={{ ...tdRight, color: hitRateColor((a.cacheRead + a.input) > 0 ? a.cacheRead / (a.cacheRead + a.input) : 0), fontWeight: 500 }}>{(a.cacheRead + a.input) > 0 ? fmtPct(a.cacheRead / (a.cacheRead + a.input), 4) : '—'}</td>
                     <td style={tdRight}>{fmtCost(a.cost)}</td>
                     <td style={tdRight}>{a.sessions}</td>
                   </tr>
@@ -691,7 +690,7 @@ export default function TokenUsage() {
                     </td>
                     <td style={tdRight}><strong>{fmtTokens(m.total)}</strong></td>
                     <td style={{ ...tdRight, color: 'var(--muted)' }}>{modelTotal > 0 ? fmtPct(m.total / modelTotal, 1) : '—'}</td>
-                    <td style={{ ...tdRight, color: hitRateColor((m.cacheRead + m.input) > 0 ? m.cacheRead / (m.cacheRead + m.input) : 0), fontWeight: 500 }}>{(m.cacheRead + m.input) > 0 ? fmtPct(m.cacheRead / (m.cacheRead + m.input), 1) : '—'}</td>
+                    <td style={{ ...tdRight, color: hitRateColor((m.cacheRead + m.input) > 0 ? m.cacheRead / (m.cacheRead + m.input) : 0), fontWeight: 500 }}>{(m.cacheRead + m.input) > 0 ? fmtPct(m.cacheRead / (m.cacheRead + m.input), 4) : '—'}</td>
                     <td style={tdRight}>{fmtCost(m.cost)}</td>
                     <td style={tdRight}>{fmtTokens(m.messages)}</td>
                   </tr>
@@ -790,8 +789,6 @@ function TokenAgentExpandable({ agent, totalAllTokens, maxTokens, colorIdx, time
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
-  const _sessionQs = timeQs ? `?${timeQs.slice(1)}` : ''; // strip leading ? if any, re-add
-  void _sessionQs; // used in fetch below
   const { data: topSessions } = useFetch<TokenAgentSession[]>(
     expanded ? `/api/profiler/tokens/${encodeURIComponent(agent.agent_name)}/sessions${timeQs}` : '',
     [expanded],
@@ -841,7 +838,7 @@ function TokenAgentExpandable({ agent, totalAllTokens, maxTokens, colorIdx, time
             <span>{t('tokenUsage.input')}: <strong style={{ color: 'var(--text)' }}>{fmtTokens(agent.input_tokens)}</strong></span>
             <span>{t('tokenUsage.output')}: <strong style={{ color: 'var(--text)' }}>{fmtTokens(agent.output_tokens)}</strong></span>
             <span>{t('tokenUsage.cacheRead')}: <strong style={{ color: 'var(--text)' }}>{fmtTokens(agent.cache_read)}</strong></span>
-            <span>{t('tokenUsage.cacheHit')}: <strong style={{ color: cacheRate > 90 ? '#34d399' : 'var(--text)' }}>{fmtPct(cacheRate / 100, 1)}</strong></span>
+            <span>{t('tokenUsage.cacheHit')}: <strong style={{ color: cacheRate > 90 ? '#34d399' : 'var(--text)' }}>{fmtPct(cacheRate / 100, 4)}</strong></span>
             <span>{t('tokenUsage.avgPerSession')}: <strong style={{ color: 'var(--text)' }}>{fmtTokens(Math.round(agent.total_tokens / Math.max(agent.session_count, 1)))}</strong></span>
           </div>
 

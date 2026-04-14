@@ -144,8 +144,25 @@ export function toolsRouter(db: Database.Database): Router {
       `).all(...tierParams) as typeof slowCalls[string];
     }
 
+    // Error calls (success = 0), regardless of duration
+    let errorWhere = 'WHERE tc.tool_name = ? AND tc.success = 0';
+    const errorParams: (string | number)[] = [toolName];
+    if (session) { errorWhere += ' AND tc.session_id = ?'; errorParams.push(session); }
+
+    const errorCalls = db.prepare(`
+      SELECT tc.id, tc.session_id, tc.agent_name, tc.timestamp, tc.duration_ms, tc.success,
+             s.started_at, s.total_messages,
+             (SELECT COUNT(*) FROM messages m
+              WHERE m.session_id = tc.session_id AND m.role = 'assistant' AND m.timestamp <= tc.timestamp) AS turn_number
+      FROM tool_calls tc
+      LEFT JOIN sessions s ON s.id = tc.session_id
+      ${errorWhere}
+      ORDER BY tc.timestamp DESC
+      LIMIT 50
+    `).all(...errorParams);
+
     // Keep backward compat: outliers = slow_5m
-    res.json({ buckets, outliers: slowCalls.slow_5m || [], slow_calls: slowCalls });
+    res.json({ buckets, outliers: slowCalls.slow_5m || [], slow_calls: slowCalls, error_calls: errorCalls });
   });
 
   return r;

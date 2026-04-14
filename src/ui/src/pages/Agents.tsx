@@ -6,7 +6,7 @@ import {
   AreaChart, Area, BarChart, Bar, ComposedChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { useFetch, fmtCost, fmtTokens } from '../hooks';
+import { useFetch, fmtCost, fmtTokens, fmtPct } from '../hooks';
 import {
   PageHeader, KpiStrip, Kpi, Loading, EmptyState,
   Card, InfoTooltip,
@@ -683,7 +683,7 @@ function AgentCard({ agent, isSelected, onSelect }: {
                        : agent.cache_hit_rate >= 0.3 ? '#f0c040'
                        : 'var(--muted)',
                 }}>
-                  {`${Math.round(agent.cache_hit_rate * 100)}%`}
+                  {fmtPct(agent.cache_hit_rate, 4)}
                 </span>
                 <span style={{ color: 'var(--muted)', fontSize: 11 }}>{t('agents.ofInputTokens7d')}</span>
               </span>
@@ -725,12 +725,9 @@ export default function Agents() {
   const summary = data?.summary;
   const agents = useMemo(() => {
     const list = data?.agents ?? [];
-    return [...list].sort((a, b) => {
-      // Agents whose directory no longer exists go last
-      if (a.dir_exists !== b.dir_exists) return a.dir_exists ? -1 : 1;
-      // Then sort by most recently active
-      return b.last_activity_ts - a.last_activity_ts;
-    });
+    return [...list]
+      .filter(a => a.dir_exists !== false)
+      .sort((a, b) => b.last_activity_ts - a.last_activity_ts);
   }, [data?.agents]);
 
   function selectAgent(agent: Agent) {

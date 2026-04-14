@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { glob } from 'glob';
-import { getClawHome } from './paths';
+import { getClawHome, cleanSlackText } from './paths';
 
 /** stop_reason / stopReason values that mean a session turn is fully closed.
  *  Values match the pi-ai upstream library that OpenClaw normalizes to:
@@ -413,10 +413,7 @@ function buildSession(
         cronTask = cronMatch[1];
       }
       // cron detection only on first user message; task summary = last user message
-      const stripped = text
-        .replace(/^\[cron:[^\]]+\]\s*/, '')
-        .replace(/\s*Conversation info \(untrusted metadata\)[\s\S]*/i, '')
-        .trim();
+      const stripped = cleanSlackText(text);
       if (stripped) taskSummary = stripped.slice(0, 150);
     }
   }
