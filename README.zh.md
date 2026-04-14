@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-green)](https://nodejs.org)
 
-**[OpenClaw](https://openclaw.ai) agent 的本地观测面板。** 你的 agent 花了多少钱、干了什么、动了哪些文件——一个面板全看到，跑在你自己机器上。
+**claw-lens 将 Observability、Analytics 与开发者工具融合为一 —— 为 [OpenClaw](https://openclaw.ai) agent 提供成本追踪、Session 分析、Profiler、Cache Trace 和安全审计，全部跑在本地。**
 
 ---
 

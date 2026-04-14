@@ -1,7 +1,7 @@
 {
   "name": "claw-lens-cli",
   "version": "0.1.1",
-  "description": "Observability devtool for OpenClaw. See what your AI agent is doing — cost monitoring, behavior tracing, and security audit.",
+  "description": "claw-lens combines observability, analytics, and developer tooling for OpenClaw agents — cost tracking, session inspection, profiler, cache trace, and security audit in one local dashboard.",
   "bin": {
     "claw-lens": "dist/bin/claw-lens.js"
   },
@@ -58,6 +58,7 @@
   "keywords": [
     "openclaw",
     "observability",
+    "analytics",
     "ai-agents",
     "dashboard",
     "llm",

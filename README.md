@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-green)](https://nodejs.org)
 
-**Local observability dashboard for [OpenClaw](https://openclaw.ai) agents.** See what your AI agents actually cost, what they do, and what they touch — in one place, on your machine.
+**claw-lens combines observability, analytics, and developer tooling for [OpenClaw](https://openclaw.ai) agents — cost tracking, session inspection, profiler, cache trace, and security audit in one local dashboard.**
 
 ---
 
