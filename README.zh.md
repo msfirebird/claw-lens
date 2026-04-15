@@ -152,7 +152,7 @@ claw-lens 直接读本地 OpenClaw 数据目录（默认 `~/.openclaw/`）：
 | 路径 | 内容 |
 |------|------|
 | `agents/*/sessions/*.jsonl` | Session 日志（包括 `.deleted` 和 `.reset` 后缀的归档文件） |
-| `logs/cache-trace.jsonl` | 缓存日志，用于回放和上下文分析 *(需要在 OpenClaw 里开启 cache trace — [怎么开](https://claw-lens.com/reference/data-retention#cache-trace-retention))* |
+| `logs/cache-trace.jsonl` | 缓存日志，用于回放和上下文分析 *(需要在 OpenClaw 里开启 cache trace — [怎么开](https://claw-lens.com/reference/data-storage#cache-trace-retention))* |
 | `cron/` | 定时任务定义和状态 |
 | `workspace-*/`, `agents/*/workspace/` | Agent 记忆和工作区文件 |
 | `openclaw.json` | Gateway 认证 token，用于实时 WebSocket 连接 |

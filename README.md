@@ -156,7 +156,7 @@ claw-lens reads directly from the local OpenClaw data directory (`~/.openclaw/` 
 | Path | Content |
 |------|---------|
 | `agents/*/sessions/*.jsonl` | Session logs (including `.deleted` and `.reset` suffixed files) |
-| `logs/cache-trace.jsonl` | Cache trace for replay and context breakdown *(note: cache trace requires to be enabled in OpenClaw — [how to enable](https://claw-lens.com/reference/data-retention#cache-trace-retention))* |
+| `logs/cache-trace.jsonl` | Cache trace for replay and context breakdown *(note: cache trace requires to be enabled in OpenClaw — [how to enable](https://claw-lens.com/reference/data-storage#cache-trace-retention))* |
 | `cron/` | Cron job definitions and state |
 | `workspace-*/`, `agents/*/workspace/` | Agent memory and workspace files |
 | `openclaw.json` | Gateway auth token for live WebSocket connection |
