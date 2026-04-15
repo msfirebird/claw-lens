@@ -28,6 +28,7 @@ export interface EventDetail {
   raw_input: string;
   raw_output: string;
   turn_number: number;
+  message_id: string | null;
   user_context: string;
   baseline?: {
     typical_hours: number[];

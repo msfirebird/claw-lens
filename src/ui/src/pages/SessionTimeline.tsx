@@ -987,10 +987,13 @@ export default function SessionTimeline() {
     }
   }, [turnParam, selectedSession]);
 
-  // Keep URL in sync when session changes
+  // Keep URL in sync when session changes, preserving turn param if present
   useEffect(() => {
-    if (selectedSession) setSearchParams({ session: selectedSession }, { replace: true });
-    else setSearchParams({}, { replace: true });
+    const params: Record<string, string> = {};
+    if (selectedSession) params.session = selectedSession;
+    const existingTurn = searchParams.get('turn');
+    if (existingTurn) params.turn = existingTurn;
+    setSearchParams(params, { replace: true });
   }, [selectedSession]);
 
   const url = selectedSession ? `/api/debug/session/${selectedSession}/timeline` : '';

@@ -88,6 +88,22 @@ export function auditRouter(db: Database.Database): Router {
   r.get('/event/:id', (req, res) => {
     const row = db.prepare('SELECT * FROM audit_events WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
     if (!row) return res.status(404).json({ error: 'Audit event not found' });
+    // Compute turn_number: count of assistant messages in this session up to (and including) this event's timestamp
+    const turnRow = db.prepare(
+      `SELECT COUNT(*) AS turn_number FROM messages WHERE session_id = ? AND role = 'assistant' AND timestamp <= ?`,
+    ).get(row.session_id, row.timestamp) as { turn_number: number } | undefined;
+    const turn_number = turnRow?.turn_number ?? 0;
+    // Find the nearest message to this event's timestamp for Sessions drill-down.
+    // Exclude synthetic assistants (delivery-mirror / gateway-injected) because
+    // Sessions.tsx /messages endpoint filters them out — returning one of those ids
+    // here would make the ?msg= highlight/scroll silently fail to find a matching row.
+    const msgRow = db.prepare(
+      `SELECT id FROM messages
+       WHERE session_id = ? AND timestamp <= ?
+         AND (role != 'assistant' OR model NOT IN ('delivery-mirror', 'gateway-injected'))
+       ORDER BY timestamp DESC LIMIT 1`,
+    ).get(row.session_id, row.timestamp) as { id: string } | undefined;
+    const message_id = msgRow?.id ?? null;
     // Attach baseline context so UI can explain anomaly flags
     const baselineRow = db.prepare('SELECT typical_hours, avg_tool_calls_per_session, typical_paths FROM agent_baselines WHERE agent_id = ?').get(row.agent_id) as { typical_hours: string; avg_tool_calls_per_session: number; typical_paths: string } | undefined;
     const safeParseArr = (v: string | undefined | null): unknown[] => { try { return JSON.parse(v || '[]') ?? []; } catch { return []; } };
@@ -96,7 +112,7 @@ export function auditRouter(db: Database.Database): Router {
       avg_tool_calls_per_session: Math.round(baselineRow.avg_tool_calls_per_session),
       typical_paths: safeParseArr(baselineRow.typical_paths) as string[],
     } : null;
-    res.json({ ...row, baseline });
+    res.json({ ...row, turn_number, message_id, baseline });
   });
 
   // GET /api/audit/event/:id/following-calls — external calls in the same session AFTER this event

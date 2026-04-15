@@ -344,9 +344,20 @@ export default function DataAccessTimeline({ agentId, eventType, riskLevel, star
                                 <span style={{ marginLeft: '.5rem', color: 'var(--text)' }}>{t('timeline.turnNum', { num: detail.turn_number })}</span>
                               )}
                               <a
-                                href={`/timeline?session=${detail.session_id}${detail.turn_number > 0 ? `&turn=${detail.turn_number}` : ''}`}
+                                href={`/sessions?q=${detail.session_id}${detail.message_id ? `&msg=${detail.message_id}` : ''}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 onClick={e => { e.stopPropagation(); }}
-                                style={{ marginLeft: '.75rem', color: 'var(--C-blue)', fontSize: 13, textDecoration: 'none' }}
+                                style={{ marginLeft: '.75rem', color: 'var(--C-blue)', fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}
+                              >
+                                {t('timeline.viewInSessions')}
+                              </a>
+                              <a
+                                href={`/timeline?session=${detail.session_id}${detail.turn_number > 0 ? `&turn=${detail.turn_number}` : ''}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={e => { e.stopPropagation(); }}
+                                style={{ marginLeft: '2rem', color: 'var(--C-blue)', fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}
                               >
                                 {t('timeline.viewInTimeline')}
                               </a>

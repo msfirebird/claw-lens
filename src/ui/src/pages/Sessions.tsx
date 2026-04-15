@@ -76,6 +76,8 @@ export default function Sessions() {
   const [detailTab, setDetailTab] = useState<'overview' | 'messages'>('overview');
   const [expandedMsgs, setExpandedMsgs] = useState<Set<string>>(new Set());
   const [msgContents, setMsgContents] = useState<Record<string, unknown[]>>({});
+  const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
+  const highlightedMsgRef = useRef<HTMLTableRowElement | null>(null);
 
   // Sync agent filter from URL query param
   useEffect(() => {
@@ -88,6 +90,54 @@ export default function Sessions() {
     const sessionId = searchParams.get('q');
     if (sessionId) { setSelected(sessionId); shouldAutoScroll.current = true; }
   }, [searchParams]);
+
+  // Consume ?msg= once on arrival: set highlight state + open Messages tab + expand row,
+  // then immediately strip the param from the URL so any subsequent searchParams change
+  // (changing an agent filter, switching sessions, etc.) doesn't re-trigger this handler
+  // with a stale message id from the previous deeplink.
+  useEffect(() => {
+    const msgId = searchParams.get('msg');
+    if (!msgId) return;
+    setHighlightedMsgId(msgId);
+    setDetailTab('messages');
+    setExpandedMsgs(prev => { const next = new Set(prev); next.add(msgId); return next; });
+    setSearchParams(p => { p.delete('msg'); return p; }, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  // Fade the highlight after 5s. Keyed on highlightedMsgId so it survives the
+  // searchParams change triggered by the consumption above.
+  useEffect(() => {
+    if (!highlightedMsgId) return;
+    const HIGHLIGHT_FADE_MS = 5_000;
+    const timer = setTimeout(() => setHighlightedMsgId(null), HIGHLIGHT_FADE_MS);
+    return () => clearTimeout(timer);
+  }, [highlightedMsgId]);
+
+  // Scroll to highlighted message once its row mounts. Poll briefly so we survive
+  // the async message-list fetch + DOM attach.
+  useEffect(() => {
+    if (!highlightedMsgId) return;
+    let attempts = 0;
+    const poll = setInterval(() => {
+      attempts++;
+      if (highlightedMsgRef.current) {
+        highlightedMsgRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        clearInterval(poll);
+      } else if (attempts > 40) {
+        clearInterval(poll);
+      }
+    }, 100);
+    return () => clearInterval(poll);
+  }, [highlightedMsgId, detailTab]);
+
+  // Pre-fetch content for the highlighted message so its expanded view shows content immediately
+  useEffect(() => {
+    if (!highlightedMsgId || !selected || msgContents[highlightedMsgId]) return;
+    fetch(`/api/sessions/${selected}/messages/${highlightedMsgId}/content`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.content) setMsgContents(prev => ({ ...prev, [highlightedMsgId]: d.content })); })
+      .catch(() => {});
+  }, [highlightedMsgId, selected]);
 
   // Auto-scroll to selected row once sessions are loaded
   useEffect(() => {
@@ -669,8 +719,14 @@ export default function Sessions() {
                                         return (
                                         <React.Fragment key={msg.id}>
                                         <tr
+                                          ref={msg.id === highlightedMsgId ? highlightedMsgRef : null}
                                           onClick={e => { e.stopPropagation(); setExpandedMsgs(prev => { const next = new Set(prev); if (next.has(msg.id)) next.delete(msg.id); else { next.add(msg.id); if (!msgContents[msg.id] && selected) { fetch(`/api/sessions/${selected}/messages/${msg.id}/content`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).then(d => { if (d.content) setMsgContents(prev2 => ({ ...prev2, [msg.id]: d.content })); }).catch(() => {}); } } return next; }); }}
-                                          style={{ cursor: 'pointer', background: isExp ? 'rgba(59,130,246,0.05)' : undefined }}
+                                          style={{
+                                            cursor: 'pointer',
+                                            background: msg.id === highlightedMsgId ? 'rgba(59,130,246,0.22)' : isExp ? 'rgba(59,130,246,0.05)' : undefined,
+                                            outline: msg.id === highlightedMsgId ? '2px solid var(--C-blue)' : 'none',
+                                            transition: 'background 0.3s, outline 0.3s',
+                                          }}
                                         >
                                           <td style={{ ...TD_STYLE, color: 'var(--muted)', fontSize: 10 }}>{isExp ? '▼' : '▶'}</td>
                                           <td style={{ ...TD_STYLE, color: 'var(--faint)' }}>{msg.seq}</td>
