@@ -15,7 +15,7 @@
     "parse": "ts-node src/server/parser.ts",
     "ingest": "ts-node src/server/db.ts",
     "start": "node dist/bin/claw-lens.js",
-    "prepare": "npm run build"
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "better-sqlite3": "^12.8.0",
